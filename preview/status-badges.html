@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+.badge { display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600; line-height:1.4; letter-spacing:0.01em; }
+.badge .dot { width:6px; height:6px; border-radius:50%; }
+.badge.new { background:var(--ink-100); color:var(--fg); }
+.badge.new .dot { background:var(--ink-500); }
+.badge.triaged { background:#DBEAFE; color:#1D4ED8; }
+.badge.triaged .dot { background:#2563EB; }
+.badge.inprog { background:#FEF3C7; color:#92400E; }
+.badge.inprog .dot { background:#D97706; }
+.badge.waiting { background:var(--warning-50); color:var(--warning-700); border:1px solid var(--warning-100); }
+.badge.waiting .dot { background:var(--warning-600); }
+.badge.resolved { background:#DCFCE7; color:#166534; }
+.badge.resolved .dot { background:#16A34A; }
+.badge.closed { background:var(--ink-50); color:var(--fg-secondary); border:1px solid var(--border); }
+.badge.closed .dot { background:var(--ink-400); }
+</style>
+</head><body>
+<div class="card">
+  <div class="row wrap" style="gap:8px;">
+    <span class="badge new"><span class="dot"></span>New</span>
+    <span class="badge triaged"><span class="dot"></span>Triaged</span>
+    <span class="badge inprog"><span class="dot"></span>In progress</span>
+    <span class="badge waiting"><span class="dot"></span>Waiting on you</span>
+    <span class="badge resolved"><span class="dot"></span>Resolved</span>
+    <span class="badge closed"><span class="dot"></span>Closed</span>
+  </div>
+  <div style="font-size:11px; color:var(--fg-muted);">Six lifecycle states. Pill shape, 11px text, paired with a colored dot for color-blind safety.</div>
+</div></body></html>

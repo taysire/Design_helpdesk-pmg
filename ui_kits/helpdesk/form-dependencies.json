@@ -1,0 +1,81 @@
+{
+  "version": 2,
+  "source": "Microsoft Forms — PMG Helpdesk prototype",
+  "description": "Arborescence conditionnelle. Les étapes Kroll imprimante ne s'affichent que si « Connexion avec Kroll » est choisi.",
+  "root": "users_affected",
+  "nodes": {
+    "users_affected": {
+      "label": "Combien d'utilisateurs sont affectés ?",
+      "options": ["Juste moi", "Mon équipe", "Tout le monde"],
+      "next": ["problem_area"]
+    },
+    "problem_area": {
+      "label": "Veuillez situer votre problème",
+      "options": [
+        "Parcours CRM",
+        "BioMetrx",
+        "Kroll",
+        "DSQ",
+        "Excel",
+        "Power BI",
+        "Imprimante",
+        "RingCentral",
+        "Audio / Casque",
+        "Autre"
+      ],
+      "branches": {
+        "Excel": ["excel_issue", "excel_other_desc?"],
+        "Power BI": ["pbi_issue", "pbi_other_desc?"],
+        "Parcours CRM": ["crm_issue", "crm_other_desc?"],
+        "BioMetrx": ["biometrx_issue", "biometrx_other_desc?"],
+        "Kroll": ["kroll_issue", "kroll_other_desc?"],
+        "DSQ": ["dsq_error", "dsq_other_desc?"],
+        "Imprimante": [
+          "printer_problem",
+          "printer_type",
+          "printer_type_other?",
+          "printer_kroll_help?",
+          "printer_connected?",
+          "printer_diagnostic?",
+          "printer_power_cycle?"
+        ],
+        "RingCentral": ["ringcentral_issue", "ringcentral_other_desc?"],
+        "Audio / Casque": [
+          "audio_mic_out",
+          "audio_situation",
+          "audio_other_desc?",
+          "audio_volume_60",
+          "audio_headset_charged"
+        ],
+        "Autre": ["other_area_desc"]
+      },
+      "then": [
+        "department",
+        "office_number",
+        "link",
+        "attachments",
+        "detailed_description"
+      ]
+    }
+  },
+  "conditional": [
+    { "if": { "problem_area": "Excel", "excel_issue": "Other" }, "show": ["excel_other_desc"] },
+    { "if": { "problem_area": "Power BI", "pbi_issue": "Other" }, "show": ["pbi_other_desc"] },
+    { "if": { "problem_area": "Parcours CRM", "crm_issue": "Autre" }, "show": ["crm_other_desc"] },
+    { "if": { "problem_area": "BioMetrx", "biometrx_issue": "Autre" }, "show": ["biometrx_other_desc"] },
+    { "if": { "problem_area": "Kroll", "kroll_issue": "Autre" }, "show": ["kroll_other_desc"] },
+    { "if": { "problem_area": "DSQ", "dsq_error": "Autre" }, "show": ["dsq_other_desc"] },
+    { "if": { "problem_area": "RingCentral", "ringcentral_issue": "Other" }, "show": ["ringcentral_other_desc"] },
+    { "if": { "problem_area": "Audio / Casque", "audio_situation": "Other" }, "show": ["audio_other_desc"] },
+    {
+      "if": { "problem_area": "Imprimante", "printer_problem": "Connexion avec Kroll" },
+      "show": [
+        "printer_kroll_help",
+        "printer_connected",
+        "printer_diagnostic",
+        "printer_power_cycle"
+      ]
+    },
+    { "if": { "problem_area": "Imprimante", "printer_type": "Autre" }, "show": ["printer_type_other"] }
+  ]
+}

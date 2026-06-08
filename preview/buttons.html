@@ -1,0 +1,31 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+.btn { font-family: var(--font-sans); font-size: 14px; font-weight: 500; padding: 8px 14px; border-radius: 6px; border:1px solid transparent; cursor:pointer; display:inline-flex; align-items:center; gap:8px; line-height:1; transition: all 120ms var(--ease-out); }
+.btn-primary { background: var(--accent-600); color: white; }
+.btn-primary:hover { background: var(--accent-700); }
+.btn-secondary { background: white; color: var(--fg); border-color: var(--border-strong); }
+.btn-secondary:hover { background: var(--ink-50); }
+.btn-ghost { background: transparent; color: var(--fg); }
+.btn-ghost:hover { background: var(--ink-100); }
+.btn-danger { background: white; color: var(--critical-700); border-color: var(--border); }
+.btn-danger:hover { background: var(--critical-50); border-color: var(--critical-600); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-lg { padding: 11px 18px; font-size: 15px; }
+.dot { width: 8px; height: 8px; border-radius:50%; background: currentColor; opacity: 0.9; }
+</style>
+</head><body>
+<div class="card">
+  <div class="row" style="gap:10px;">
+    <button class="btn btn-primary">Report something</button>
+    <button class="btn btn-secondary">Save draft</button>
+    <button class="btn btn-ghost">Cancel</button>
+    <button class="btn btn-danger">Close ticket</button>
+  </div>
+  <div class="row" style="gap:10px;">
+    <button class="btn btn-primary btn-sm">+ New</button>
+    <button class="btn btn-secondary btn-sm">Filter</button>
+    <button class="btn btn-secondary btn-sm">Export</button>
+    <button class="btn btn-primary btn-lg">Submit ticket</button>
+  </div>
+  <div style="font-size:11px; color:var(--fg-muted);">Primary · Secondary · Ghost · Danger — 6px radius, 36px default height. Press shifts down 1px.</div>
+</div></body></html>

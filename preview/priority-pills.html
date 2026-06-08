@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+.prio { display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:4px; font-size:11px; font-weight:600; font-family:var(--font-mono); letter-spacing:0.02em; }
+.prio.p1 { background:#FEE2E2; color:#991B1B; }
+.prio.p2 { background:#FFEDD5; color:#9A3412; }
+.prio.p3 { background:#FEF9C3; color:#854D0E; }
+.prio.p4 { background:var(--ink-100); color:var(--fg-secondary); }
+.prio .bar { display:inline-flex; gap:2px; }
+.prio .bar i { width:3px; height:9px; background:currentColor; border-radius:1px; opacity:0.3; }
+.prio .bar i.on { opacity:1; }
+</style>
+</head><body>
+<div class="card">
+  <div class="row wrap" style="gap:14px;">
+    <div class="col">
+      <span class="prio p1"><span class="bar"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span>P1</span>
+      <span style="font-size:11px; color:var(--fg-muted);">Down for the org</span>
+    </div>
+    <div class="col">
+      <span class="prio p2"><span class="bar"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>P2</span>
+      <span style="font-size:11px; color:var(--fg-muted);">Down for a team</span>
+    </div>
+    <div class="col">
+      <span class="prio p3"><span class="bar"><i class="on"></i><i class="on"></i><i></i><i></i></span>P3</span>
+      <span style="font-size:11px; color:var(--fg-muted);">Degraded</span>
+    </div>
+    <div class="col">
+      <span class="prio p4"><span class="bar"><i class="on"></i><i></i><i></i><i></i></span>P4</span>
+      <span style="font-size:11px; color:var(--fg-muted);">Annoyance</span>
+    </div>
+  </div>
+  <div style="font-size:11px; color:var(--fg-muted);">Square 4px radius distinguishes priorities from lifecycle status pills.</div>
+</div></body></html>

@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+.av { width:32px; height:32px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; color:white; flex-shrink:0; }
+.av-sm { width:22px; height:22px; font-size:10px; }
+.av-lg { width:48px; height:48px; font-size:16px; }
+.av-stack > * + * { margin-left:-8px; box-shadow: 0 0 0 2px white; }
+</style>
+</head><body>
+<div class="card">
+  <div class="row" style="gap:14px;">
+    <div class="av av-lg" style="background:linear-gradient(135deg,#16A37E,#0F8B66);">MT</div>
+    <div class="av" style="background:linear-gradient(135deg,#2563EB,#1D4ED8);">AL</div>
+    <div class="av av-sm" style="background:linear-gradient(135deg,#D97706,#92400E);">PR</div>
+    <div class="av" style="background:var(--ink-100); color:var(--fg-secondary); border:1px solid var(--border);">+5</div>
+    <div class="row av-stack" style="gap:0;">
+      <div class="av" style="background:linear-gradient(135deg,#16A37E,#0F8B66);">MT</div>
+      <div class="av" style="background:linear-gradient(135deg,#2563EB,#1D4ED8);">AL</div>
+      <div class="av" style="background:linear-gradient(135deg,#D97706,#92400E);">PR</div>
+      <div class="av" style="background:var(--ink-100); color:var(--fg-secondary); border:1px solid var(--border); margin-left:-8px;">+4</div>
+    </div>
+  </div>
+  <div style="font-size:11px; color:var(--fg-muted);">Initials only — we don't have photos for IT staff. Gradient = team color (green pharmacy, blue infra, amber facilities).</div>
+</div></body></html>

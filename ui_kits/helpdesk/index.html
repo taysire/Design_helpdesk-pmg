@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=1280"/>
+<title>PMG Helpdesk</title>
+<link rel="stylesheet" href="../../colors_and_type.css"/>
+<link rel="stylesheet" href="helpdesk-ui.css"/>
+<style>
+  html, body { margin:0; padding:0; background: var(--ink-50); }
+  #app { min-height: 100vh; display:flex; }
+  .main { flex:1; display:flex; flex-direction:column; min-width:0; min-height:100vh; }
+  .content { flex:1; overflow:auto; }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; }
+  .toast-host { position: fixed; bottom: 20px; right: 20px; display:flex; flex-direction:column; gap:8px; z-index: 100; }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="data.jsx?v=13"></script>
+<script type="text/babel" src="i18n.jsx?v=16"></script>
+<script type="text/babel" src="ticket-lifecycle.jsx?v=10"></script>
+<script type="text/babel" src="helpdesk-analytics.jsx?v=3"></script>
+<script type="text/babel" src="components.jsx?v=11"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="Login.jsx"></script>
+<script type="text/babel" src="Sidebar.jsx?v=4"></script>
+<script type="text/babel" src="Topbar.jsx?v=11"></script>
+<script type="text/babel" src="Home.jsx?v=15"></script>
+<script type="text/babel" src="ReportsDashboard.jsx?v=2"></script>
+<script type="text/babel" src="Inbox.jsx?v=10"></script>
+<script type="text/babel" src="report-form-schema.jsx?v=14"></script>
+<script type="text/babel" src="service-request-schema.jsx?v=4"></script>
+<script type="text/babel" src="onboarding-request-schema.jsx?v=5"></script>
+<script type="text/babel" src="offboarding-request-schema.jsx?v=9"></script>
+<script type="text/babel" src="equipment-request-schema.jsx?v=7"></script>
+<script type="text/babel" src="TicketDetail.jsx?v=11"></script>
+<script type="text/babel" src="SpecialServiceForm.jsx?v=4"></script>
+<script type="text/babel" src="OnboardingArrivalForm.jsx?v=6"></script>
+<script type="text/babel" src="EmployeeDepartureForm.jsx?v=9"></script>
+<script type="text/babel" src="ITEquipmentRequestForm.jsx?v=7"></script>
+<script type="text/babel" src="DynamicReportForm.jsx?v=15"></script>
+<script type="text/babel" src="NewTicket.jsx?v=2"></script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "role": "it"
+}/*EDITMODE-END*/;
+
+function App() {
+  return (
+    <I18nProvider defaultLang="fr">
+      <AppShell/>
+    </I18nProvider>
+  );
+}
+
+function AppShell() {
+  const { t, lang, setLang } = useI18n();
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const role = tweaks.role;
+  const [signedIn, setSignedIn] = React.useState(false);
+
+  React.useEffect(() => {
+    const handler = () => setSignedIn(false);
+    window.addEventListener('pmg-signout', handler);
+    return () => window.removeEventListener('pmg-signout', handler);
+  }, []);
+
+  return (
+    <>
+      {signedIn
+        ? <SignedInApp role={role} onRoleChange={v => setTweak('role', v)} onSignOut={() => setSignedIn(false)}/>
+        : <Login onSignIn={() => setSignedIn(true)}/>}
+
+      <TweaksPanel title={lang === 'fr' ? 'Réglages' : 'Tweaks'}>
+        <TweakRadio
+          label={t('tweaks.language')}
+          value={lang}
+          onChange={v => setLang(v)}
+          options={[
+            { value:'fr', label:'Français' },
+            { value:'en', label:'English' },
+          ]}
+        />
+        <TweakRadio
+          label={t('tweaks.audience')}
+          value={role}
+          onChange={v => setTweak('role', v)}
+          options={[
+            { value:'enduser', label: t('tweaks.endUser') },
+            { value:'it',      label: t('tweaks.itTeam') },
+          ]}
+        />
+        <div className="twk-section-sub">
+          {role === 'enduser' ? t('tweaks.endHint') : t('tweaks.itHint')}
+        </div>
+      </TweaksPanel>
+    </>
+  );
+}
+
+function SignedInApp({ role, onRoleChange, onSignOut }) {
+  const { t } = useI18n();
+  const [tickets, setTickets] = React.useState(window.PMG_DATA.TICKETS);
+  const [view, setView] = React.useState('home');       // home | mine | inbox | wait | cat:<id> | new | detail
+  const [openId, setOpenId] = React.useState(null);
+  const [toasts, setToasts] = React.useState([]);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [compactTable, setCompactTable] = React.useState(() => {
+    try { return localStorage.getItem('pmg-compact-table') === '1'; } catch (e) { return false; }
+  });
+  const isIt = role === 'it';
+
+  React.useEffect(() => {
+    if (!isIt) setCompactTable(false);
+    else {
+      try { localStorage.setItem('pmg-compact-table', compactTable ? '1' : '0'); } catch (e) {}
+    }
+  }, [compactTable, isIt]);
+
+  const counts = {
+    mine: tickets.filter(t => (t.reporter === 'me' || t.assignee === 'me') && isTicketActive(t.status)).length,
+    all:  tickets.filter(t => isTicketActive(t.status)).length,
+    waiting: tickets.filter(t => {
+      const s = normalizeStatus(t.status);
+      return (s === 'waiting_info' || s === 'waiting') && t.reporter === 'me';
+    }).length,
+  };
+
+  // When role flips, send the user to a view that makes sense for it.
+  React.useEffect(() => {
+    if (role === 'enduser' && (view === 'inbox' || view === 'wait' || view === 'reports' || view.startsWith('cat:'))) {
+      setView('home'); setOpenId(null);
+    }
+  }, [role]);
+
+  const openTicket = (id) => { setOpenId(id); setView('detail'); };
+  const back = () => { setOpenId(null); if (view==='detail') setView('home'); };
+
+  const showToast = (kind, title, body) => {
+    const id = Math.random().toString(36).slice(2,8);
+    setToasts(t => [...t, { id, kind, title, body }]);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 5000);
+  };
+
+  const patchTicket = (id, updater) => {
+    setTickets(prev => prev.map(tk => tk.id === id ? updater({ ...tk }) : tk));
+  };
+
+  const submitTicket = (ticket) => {
+    const withActivity = {
+      ...ticket,
+      status: normalizeStatus(ticket.status || 'new'),
+      createdAt: ticket.createdAt || new Date().toISOString(),
+      department: ticket.department || ticket.formAnswers?.department || null,
+      activity: ticket.activity?.length ? ticket.activity : [buildOpenedActivity('me')],
+    };
+    setTickets(prev => [withActivity, ...prev]);
+    showToast('success', t('toast.submittedTitle'), t('toast.submittedBody', { id: withActivity.id }));
+    setView('home');
+    setOpenId(null);
+  };
+
+  const changeTicketStatus = (id, newStatus) => {
+    const tk = tickets.find(x => x.id === id);
+    if (!tk) return;
+    const oldStatus = normalizeStatus(tk.status);
+    const next = normalizeStatus(newStatus);
+    if (oldStatus === next) return;
+
+    patchTicket(id, t => applyStatusChange(t, next, 'me'));
+
+    showToast('success', t('toast.statusTitle'), t('toast.statusBody', {
+      id, status: t(`status.${next}`),
+    }));
+
+    const notif = getStatusNotification(t, tk, oldStatus, next);
+    if (notif) {
+      showToast('info', notif.title, notif.body);
+      const rep = personName(tk.reporter);
+      showToast('success', t('toast.notifySentTitle'), t('toast.notifySentBody', { name: rep }));
+    }
+  };
+
+  const addTicketComment = (id, text) => {
+    const authorRole = role === 'enduser' ? 'enduser' : 'it';
+    patchTicket(id, t => applyComment(t, text, 'me', authorRole));
+    showToast('success', t('toast.commentTitle'), '');
+  };
+
+  const reopenTicket = (id) => {
+    const tk = tickets.find(x => x.id === id);
+    if (!tk) return;
+    patchTicket(id, t => applyReopen(t, 'me', null, t));
+    showToast('success', t('toast.reopenedTitle'), t('toast.reopenedBody'));
+    const notif = getReopenNotification(t, tk);
+    if (notif && isIt) {
+      showToast('info', notif.title, notif.body);
+    }
+  };
+
+  const assignTicket = (id, assigneeId) => {
+    patchTicket(id, t => ({ ...t, assignee: assigneeId, updated: formatTicketUpdated() }));
+  };
+
+  const currentTicket = tickets.find(t => t.id === openId);
+
+  let title = t('titles.home'), breadcrumb = null;
+  if (view === 'mine') title = t('titles.myTickets');
+  else if (view === 'reports') title = t('titles.reports');
+  else if (view === 'inbox') title = t('titles.allTickets');
+  else if (view === 'wait') title = t('titles.waitingOnMe');
+  else if (view === 'new' || view.startsWith('new:')) {
+    title = t('titles.reportSomething');
+    breadcrumb = view.startsWith('new:')
+      ? (getLocalizedPortalIncident(view.slice(4), document.documentElement.lang || 'fr')?.label || t('titles.newTicket'))
+      : t('titles.newTicket');
+  }
+  else if (view === 'detail' && currentTicket) { title = currentTicket.title; breadcrumb = currentTicket.id; }
+  else if (view.startsWith('cat:')) {
+    const c = getLocalizedCategory(view.slice(4), document.documentElement.lang || 'fr');
+    title = c?.label || t('titles.category'); breadcrumb = t('titles.category');
+  }
+  else if (view === 'service:special-it') {
+    title = t('titles.serviceSpecialIt'); breadcrumb = t('home.servicesIt');
+  }
+  else if (view === 'service:employee-arrival') {
+    title = t('titles.serviceEmployeeArrival'); breadcrumb = t('home.servicesIt');
+  }
+  else if (view === 'service:employee-departure') {
+    title = t('titles.serviceEmployeeDeparture'); breadcrumb = t('home.servicesIt');
+  }
+  else if (view === 'service:it-equipment') {
+    title = t('titles.serviceItEquipment'); breadcrumb = t('home.servicesIt');
+  }
+
+  return (
+    <>
+      <Sidebar
+        role={role}
+        currentView={view}
+        setCurrentView={(v) => { setView(v); setOpenId(null); }}
+        ticketCounts={counts}
+        onNew={() => setView('new')}
+      />
+      <div className="main">
+        <Topbar role={role} title={title} breadcrumb={breadcrumb}
+          searchQuery={searchQuery} onSearchChange={setSearchQuery}
+          onRoleChange={onRoleChange}/>
+        <div className="content">
+          {view === 'reports' && isIt && (
+            <ReportsDashboard
+              tickets={tickets}
+              onOpenTicket={openTicket}
+              onSendWeeklyReport={() => showToast('success', t('toast.weeklyReportTitle'), t('toast.weeklyReportBody'))}
+            />
+          )}
+          {view === 'home' && (
+            <Home role={role} tickets={tickets} openTicket={openTicket} setCurrentView={setView}
+              searchQuery={searchQuery} onSearchChange={setSearchQuery}
+              onFilterStatus={(status) => {
+                setView('inbox');
+                try { sessionStorage.setItem('pmg-inbox-status', status); } catch (e) {}
+              }}/>
+          )}
+          {(view === 'new' || view.startsWith('new:')) && (
+            role === 'enduser'
+              ? <DynamicReportForm
+                  role={role}
+                  portalCategory={view.startsWith('new:') ? view.slice(4) : null}
+                  onCancel={() => setView('home')}
+                  onSubmit={submitTicket}
+                  onViewTicket={(id) => { setOpenId(id); setView('detail'); }}/>
+              : <NewTicket onCancel={() => setView('home')} onSubmit={submitTicket}/>
+          )}
+          {view === 'service:special-it' && (
+            <SpecialServiceForm onCancel={() => setView('home')} onSubmit={submitTicket}/>
+          )}
+          {view === 'service:employee-arrival' && (
+            <OnboardingArrivalForm onCancel={() => setView('home')} onSubmit={submitTicket}/>
+          )}
+          {view === 'service:employee-departure' && (
+            <EmployeeDepartureForm onCancel={() => setView('home')} onSubmit={submitTicket}/>
+          )}
+          {view === 'service:it-equipment' && (
+            <ITEquipmentRequestForm onCancel={() => setView('home')} onSubmit={submitTicket}/>
+          )}
+          {view === 'detail' && currentTicket && (
+            <TicketDetail role={role} ticket={currentTicket}
+              onBack={back}
+              onStatusChange={isIt ? (s) => changeTicketStatus(currentTicket.id, s) : undefined}
+              onAddComment={(text) => addTicketComment(currentTicket.id, text)}
+              onReopen={canReopenTicket(role, currentTicket) ? () => reopenTicket(currentTicket.id) : undefined}
+              onAssign={isIt ? (aid) => assignTicket(currentTicket.id, aid) : undefined}/>
+          )}
+          {(view === 'mine' || view === 'inbox' || view === 'wait' || view.startsWith('cat:')) && (
+            <Inbox role={role} tickets={tickets} scope={view === 'inbox' ? 'all' : view} openTicket={openTicket}
+              searchQuery={searchQuery} onSearchChange={setSearchQuery}
+              compact={isIt && compactTable} onCompactChange={isIt ? setCompactTable : undefined}/>
+          )}
+        </div>
+      </div>
+
+      {/* Toasts */}
+      <div className="toast-host">
+        {toasts.map(t => <Toast key={t.id} {...t} onClose={() => setToasts(ts => ts.filter(x => x.id !== t.id))}/>)}
+      </div>
+    </>
+  );
+}
+
+function Toast({ kind, title, body, onClose }) {
+  const meta = {
+    success: { bg:'white', border:'var(--border)', iconBg:'var(--success-100)', iconFg:'var(--success-700)', icon:'check' },
+    info:    { bg:'white', border:'var(--accent-100)', iconBg:'var(--accent-50)', iconFg:'var(--accent-700)', icon:'bell' },
+    error:   { bg:'var(--critical-50)', border:'var(--critical-100)', iconBg:'var(--critical-100)', iconFg:'var(--critical-700)', icon:'alert' },
+  }[kind] || { bg:'white', border:'var(--border)', iconBg:'var(--ink-100)', iconFg:'var(--fg)', icon:'bell' };
+  return (
+    <div style={{
+      display:'flex', gap:12, padding:'12px 14px',
+      border:'1px solid '+meta.border, borderRadius:8, background:meta.bg,
+      boxShadow:'0 4px 12px rgba(11,13,16,0.08)',
+      width: 360, alignItems:'flex-start',
+      animation: 'slideUp 200ms cubic-bezier(0.2,0.7,0.2,1)',
+    }}>
+      <div style={{
+        width:20, height:20, borderRadius:'50%',
+        background: meta.iconBg, color: meta.iconFg,
+        display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:1,
+      }}>
+        <Icon name={meta.icon} size={12} strokeWidth={2.5}/>
+      </div>
+      <div style={{flex:1}}>
+        <div style={{fontSize:13, fontWeight:600, color:'var(--fg)'}}>{title}</div>
+        {body ? <div style={{fontSize:12, color:'var(--fg-secondary)', whiteSpace:'pre-wrap', lineHeight:1.45, marginTop:4}}>{body}</div> : null}
+      </div>
+      <button onClick={onClose} style={{background:'transparent', border:0, color:'var(--fg-muted)', cursor:'pointer', padding:0}}>
+        <Icon name="x" size={14}/>
+      </button>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('app'));
+root.render(<App/>);
+</script>
+
+<style>
+@keyframes slideUp {
+  from { transform: translateY(8px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+</style>
+</body>
+</html>
