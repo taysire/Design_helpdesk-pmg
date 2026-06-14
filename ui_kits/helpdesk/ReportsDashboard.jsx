@@ -1,10 +1,48 @@
 // ReportsDashboard — KPI et reporting TI (style Jira / Zendesk Explore)
 
-function ReportsDashboard({ tickets, onOpenTicket, onSendWeeklyReport }) {
+function ReportsDashboard({ tickets, apiOnline = false, onOpenTicket, onSendWeeklyReport }) {
   const { t, lang } = useI18n();
-  const analytics = React.useMemo(() => computeHelpdeskAnalytics(tickets, t, lang), [tickets, t, lang]);
+  const [apiAnalytics, setApiAnalytics] = React.useState(null);
+  const [analyticsError, setAnalyticsError] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!apiOnline) {
+      setApiAnalytics(null);
+      setAnalyticsError(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchAnalyticsDashboard(lang);
+        if (!cancelled) {
+          setApiAnalytics(data);
+          setAnalyticsError(false);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setApiAnalytics(null);
+          setAnalyticsError(true);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [apiOnline, lang, tickets.length]);
+
+  const analytics = React.useMemo(() => {
+    const base = apiOnline && apiAnalytics && !analyticsError
+      ? apiAnalytics
+      : computeHelpdeskAnalytics(tickets, t, lang);
+    return {
+      ...base,
+      mttfrLabel: formatDurationHours(base.mttfr, t),
+      mttrLabel: formatDurationHours(base.mttr, t),
+    };
+  }, [apiOnline, apiAnalytics, analyticsError, tickets, t, lang]);
+
   const weeklyReport = React.useMemo(() => buildWeeklyReport(analytics, t, lang), [analytics, t, lang]);
   const [showReport, setShowReport] = React.useState(false);
+  const usingApiData = apiOnline && apiAnalytics && !analyticsError;
 
   const sendReport = () => {
     onSendWeeklyReport && onSendWeeklyReport(weeklyReport);
@@ -19,8 +57,10 @@ function ReportsDashboard({ tickets, onOpenTicket, onSendWeeklyReport }) {
             <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>{t('analytics.title')}</h1>
             <span style={{
               fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 999,
-              background: 'var(--success-50)', color: 'var(--success-700)', border: '1px solid var(--success-100)',
-            }}>{t('analytics.live')}</span>
+              background: usingApiData ? 'var(--success-50)' : 'var(--info-50)',
+              color: usingApiData ? 'var(--success-700)' : 'var(--info-700)',
+              border: `1px solid ${usingApiData ? 'var(--success-100)' : 'var(--info-100)'}`,
+            }}>{usingApiData ? t('analytics.liveApi') : t('analytics.live')}</span>
           </div>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-secondary)', maxWidth: 560, lineHeight: 1.5 }}>
             {t('analytics.subtitle')}

@@ -29,6 +29,7 @@
 <script type="text/babel" src="ticket-lifecycle.jsx?v=10"></script>
 <script type="text/babel" src="api-client.jsx?v=3"></script>
 <script type="text/babel" src="portal-client.jsx?v=1"></script>
+<script type="text/babel" src="analytics-client.jsx?v=1"></script>
 <script type="text/babel" src="helpdesk-analytics.jsx?v=3"></script>
 <script type="text/babel" src="components.jsx?v=11"></script>
 <script type="text/babel" src="tweaks-panel.jsx"></script>
@@ -36,7 +37,7 @@
 <script type="text/babel" src="Sidebar.jsx?v=4"></script>
 <script type="text/babel" src="Topbar.jsx?v=11"></script>
 <script type="text/babel" src="Home.jsx?v=19"></script>
-<script type="text/babel" src="ReportsDashboard.jsx?v=2"></script>
+<script type="text/babel" src="ReportsDashboard.jsx?v=3"></script>
 <script type="text/babel" src="Inbox.jsx?v=10"></script>
 <script type="text/babel" src="report-form-schema.jsx?v=15"></script>
 <script type="text/babel" src="service-request-schema.jsx?v=4"></script>
@@ -397,6 +398,7 @@ function SignedInApp({ role, apiOnline, onRoleChange, onSignOut }) {
           {view === 'reports' && isIt && (
             <ReportsDashboard
               tickets={tickets}
+              apiOnline={apiOnline}
               onOpenTicket={openTicket}
               onSendWeeklyReport={() => showToast('success', t('toast.weeklyReportTitle'), t('toast.weeklyReportBody'))}
             />
