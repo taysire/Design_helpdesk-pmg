@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=1280"/>
 <title>PMG Helpdesk</title>
 <link rel="stylesheet" href="../../colors_and_type.css"/>
-<link rel="stylesheet" href="helpdesk-ui.css"/>
+<link rel="stylesheet" href="helpdesk-ui.css?v=4"/>
 <style>
   html, body { margin:0; padding:0; background: var(--ink-50); }
   #app { min-height: 100vh; display:flex; }
@@ -24,16 +24,17 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
-<script type="text/babel" src="data.jsx?v=13"></script>
-<script type="text/babel" src="i18n.jsx?v=16"></script>
+<script type="text/babel" src="data.jsx?v=14"></script>
+<script type="text/babel" src="i18n.jsx?v=19"></script>
 <script type="text/babel" src="ticket-lifecycle.jsx?v=10"></script>
+<script type="text/babel" src="api-client.jsx?v=1"></script>
 <script type="text/babel" src="helpdesk-analytics.jsx?v=3"></script>
 <script type="text/babel" src="components.jsx?v=11"></script>
 <script type="text/babel" src="tweaks-panel.jsx"></script>
 <script type="text/babel" src="Login.jsx"></script>
 <script type="text/babel" src="Sidebar.jsx?v=4"></script>
 <script type="text/babel" src="Topbar.jsx?v=11"></script>
-<script type="text/babel" src="Home.jsx?v=15"></script>
+<script type="text/babel" src="Home.jsx?v=19"></script>
 <script type="text/babel" src="ReportsDashboard.jsx?v=2"></script>
 <script type="text/babel" src="Inbox.jsx?v=10"></script>
 <script type="text/babel" src="report-form-schema.jsx?v=14"></script>
@@ -48,6 +49,7 @@
 <script type="text/babel" src="ITEquipmentRequestForm.jsx?v=7"></script>
 <script type="text/babel" src="DynamicReportForm.jsx?v=15"></script>
 <script type="text/babel" src="NewTicket.jsx?v=2"></script>
+<script type="text/babel" src="ServiceView.jsx?v=2"></script>
 
 <script type="text/babel">
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
@@ -67,6 +69,8 @@ function AppShell() {
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const role = tweaks.role;
   const [signedIn, setSignedIn] = React.useState(false);
+  const [apiOnline, setApiOnline] = React.useState(false);
+  const [apiLoading, setApiLoading] = React.useState(true);
 
   React.useEffect(() => {
     const handler = () => setSignedIn(false);
@@ -74,10 +78,22 @@ function AppShell() {
     return () => window.removeEventListener('pmg-signout', handler);
   }, []);
 
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const health = await checkApiHealth();
+      if (!cancelled) {
+        setApiOnline(health.ok);
+        setApiLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <>
       {signedIn
-        ? <SignedInApp role={role} onRoleChange={v => setTweak('role', v)} onSignOut={() => setSignedIn(false)}/>
+        ? <SignedInApp role={role} apiOnline={apiOnline} onRoleChange={v => setTweak('role', v)} onSignOut={() => setSignedIn(false)}/>
         : <Login onSignIn={() => setSignedIn(true)}/>}
 
       <TweaksPanel title={lang === 'fr' ? 'Réglages' : 'Tweaks'}>
@@ -102,13 +118,21 @@ function AppShell() {
         <div className="twk-section-sub">
           {role === 'enduser' ? t('tweaks.endHint') : t('tweaks.itHint')}
         </div>
+        <div className="twk-section-sub" style={{marginTop:8, fontSize:12}}>
+          API :{' '}
+          {apiLoading
+            ? (lang === 'fr' ? 'connexion…' : 'connecting…')
+            : apiOnline
+              ? <span style={{color:'var(--success-700)'}}>{PMG_API.getBase()}</span>
+              : <span style={{color:'var(--fg-secondary)'}}>{lang === 'fr' ? 'hors ligne (mock)' : 'offline (mock)'}</span>}
+        </div>
       </TweaksPanel>
     </>
   );
 }
 
-function SignedInApp({ role, onRoleChange, onSignOut }) {
-  const { t } = useI18n();
+function SignedInApp({ role, apiOnline, onRoleChange, onSignOut }) {
+  const { t, lang } = useI18n();
   const [tickets, setTickets] = React.useState(window.PMG_DATA.TICKETS);
   const [view, setView] = React.useState('home');       // home | mine | inbox | wait | cat:<id> | new | detail
   const [openId, setOpenId] = React.useState(null);
@@ -118,6 +142,29 @@ function SignedInApp({ role, onRoleChange, onSignOut }) {
     try { return localStorage.getItem('pmg-compact-table') === '1'; } catch (e) { return false; }
   });
   const isIt = role === 'it';
+
+  const showToast = (kind, title, body) => {
+    const id = Math.random().toString(36).slice(2,8);
+    setToasts(t => [...t, { id, kind, title, body }]);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 5000);
+  };
+
+  React.useEffect(() => {
+    if (!apiOnline) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const fromApi = await fetchTicketsFromApi();
+        if (!cancelled) setTickets(fromApi);
+      } catch (e) {
+        if (!cancelled) {
+          showToast('info', lang === 'fr' ? 'API indisponible' : 'API unavailable',
+            lang === 'fr' ? 'Données locales utilisées.' : 'Using local mock data.');
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [apiOnline]);
 
   React.useEffect(() => {
     if (!isIt) setCompactTable(false);
@@ -142,20 +189,35 @@ function SignedInApp({ role, onRoleChange, onSignOut }) {
     }
   }, [role]);
 
+  const navigate = React.useCallback((nextView) => {
+    setView(nextView);
+    setOpenId(null);
+  }, []);
   const openTicket = (id) => { setOpenId(id); setView('detail'); };
   const back = () => { setOpenId(null); if (view==='detail') setView('home'); };
+  const activeServiceId = view.startsWith('service:') ? view.slice('service:'.length) : null;
 
-  const showToast = (kind, title, body) => {
-    const id = Math.random().toString(36).slice(2,8);
-    setToasts(t => [...t, { id, kind, title, body }]);
-    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 5000);
+  const renderServiceForm = (serviceId, onCancel, onSubmit) => {
+    const props = { onCancel, onSubmit };
+    switch (serviceId) {
+      case 'special-it': return <SpecialServiceForm {...props}/>;
+      case 'employee-arrival': return <OnboardingArrivalForm {...props}/>;
+      case 'employee-departure': return <EmployeeDepartureForm {...props}/>;
+      case 'it-equipment': return <ITEquipmentRequestForm {...props}/>;
+      default: return (
+        <div className="hd-page-narrow" style={{ padding: 24 }}>
+          <p style={{ color: 'var(--fg-secondary)' }}>{t('home.serviceNotFound')}</p>
+          <Button variant="secondary" size="md" onClick={onCancel}>{t('home.articleModalClose')}</Button>
+        </div>
+      );
+    }
   };
 
   const patchTicket = (id, updater) => {
     setTickets(prev => prev.map(tk => tk.id === id ? updater({ ...tk }) : tk));
   };
 
-  const submitTicket = (ticket) => {
+  const submitTicket = async (ticket) => {
     const withActivity = {
       ...ticket,
       status: normalizeStatus(ticket.status || 'new'),
@@ -163,6 +225,27 @@ function SignedInApp({ role, onRoleChange, onSignOut }) {
       department: ticket.department || ticket.formAnswers?.department || null,
       activity: ticket.activity?.length ? ticket.activity : [buildOpenedActivity('me')],
     };
+
+    if (apiOnline) {
+      try {
+        const saved = await createTicketViaApi(withActivity);
+        const merged = {
+          ...saved,
+          activity: withActivity.activity,
+          opened: saved.opened || 'just now',
+          updated: saved.updated || 'just now',
+        };
+        setTickets(prev => [merged, ...prev]);
+        showToast('success', t('toast.submittedTitle'), t('toast.submittedBody', { id: merged.id }));
+        setView('home');
+        setOpenId(null);
+        return;
+      } catch (e) {
+        showToast('info', lang === 'fr' ? 'Erreur API' : 'API error',
+          lang === 'fr' ? 'Ticket enregistré localement seulement.' : 'Ticket saved locally only.');
+      }
+    }
+
     setTickets(prev => [withActivity, ...prev]);
     showToast('success', t('toast.submittedTitle'), t('toast.submittedBody', { id: withActivity.id }));
     setView('home');
@@ -229,17 +312,10 @@ function SignedInApp({ role, onRoleChange, onSignOut }) {
     const c = getLocalizedCategory(view.slice(4), document.documentElement.lang || 'fr');
     title = c?.label || t('titles.category'); breadcrumb = t('titles.category');
   }
-  else if (view === 'service:special-it') {
-    title = t('titles.serviceSpecialIt'); breadcrumb = t('home.servicesIt');
-  }
-  else if (view === 'service:employee-arrival') {
-    title = t('titles.serviceEmployeeArrival'); breadcrumb = t('home.servicesIt');
-  }
-  else if (view === 'service:employee-departure') {
-    title = t('titles.serviceEmployeeDeparture'); breadcrumb = t('home.servicesIt');
-  }
-  else if (view === 'service:it-equipment') {
-    title = t('titles.serviceItEquipment'); breadcrumb = t('home.servicesIt');
+  else if (activeServiceId) {
+    const svc = getLocalizedService(activeServiceId, lang);
+    title = svc?.label || activeServiceId;
+    breadcrumb = t('home.servicesIt');
   }
 
   return (
@@ -264,10 +340,10 @@ function SignedInApp({ role, onRoleChange, onSignOut }) {
             />
           )}
           {view === 'home' && (
-            <Home role={role} tickets={tickets} openTicket={openTicket} setCurrentView={setView}
+            <Home role={role} tickets={tickets} openTicket={openTicket} setCurrentView={navigate}
               searchQuery={searchQuery} onSearchChange={setSearchQuery}
               onFilterStatus={(status) => {
-                setView('inbox');
+                navigate('inbox');
                 try { sessionStorage.setItem('pmg-inbox-status', status); } catch (e) {}
               }}/>
           )}
@@ -281,18 +357,7 @@ function SignedInApp({ role, onRoleChange, onSignOut }) {
                   onViewTicket={(id) => { setOpenId(id); setView('detail'); }}/>
               : <NewTicket onCancel={() => setView('home')} onSubmit={submitTicket}/>
           )}
-          {view === 'service:special-it' && (
-            <SpecialServiceForm onCancel={() => setView('home')} onSubmit={submitTicket}/>
-          )}
-          {view === 'service:employee-arrival' && (
-            <OnboardingArrivalForm onCancel={() => setView('home')} onSubmit={submitTicket}/>
-          )}
-          {view === 'service:employee-departure' && (
-            <EmployeeDepartureForm onCancel={() => setView('home')} onSubmit={submitTicket}/>
-          )}
-          {view === 'service:it-equipment' && (
-            <ITEquipmentRequestForm onCancel={() => setView('home')} onSubmit={submitTicket}/>
-          )}
+          {activeServiceId && renderServiceForm(activeServiceId, () => navigate('home'), submitTicket)}
           {view === 'detail' && currentTicket && (
             <TicketDetail role={role} ticket={currentTicket}
               onBack={back}

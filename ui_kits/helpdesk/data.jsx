@@ -292,4 +292,17 @@ const TICKETS = [
     opened: '8 weeks ago', updated: '54 days ago', body: '', activity: [] },
 ];
 
-window.PMG_DATA = { CATEGORIES, PORTAL_INCIDENT_ITEMS, PORTAL_INCIDENT_GROUPS, IT_PROCESS_CATEGORIES, SERVICE_CATALOG, PEOPLE, TICKETS };
+/** Articles d'aide — base de connaissances (démo, recherche hero). */
+const HELP_ARTICLES = [
+  { id: 'printer-offline', icon: 'printer', portalId: 'imprimante', popular: true },
+  { id: 'password-reset', icon: 'key', portalId: 'access', popular: true },
+  { id: 'avd-home', icon: 'monitor', portalId: 'avd', popular: true },
+  { id: 'kroll-slow', icon: 'pill', portalId: 'kroll', popular: false },
+  { id: 'access-request', icon: 'key', portalId: 'access', popular: false },
+  { id: 'ringcentral-setup', icon: 'phone', portalId: 'ringcentral', popular: false },
+];
+
+window.PMG_DATA = {
+  CATEGORIES, PORTAL_INCIDENT_ITEMS, PORTAL_INCIDENT_GROUPS, IT_PROCESS_CATEGORIES,
+  SERVICE_CATALOG, HELP_ARTICLES, PEOPLE, TICKETS,
+};

@@ -44,7 +44,7 @@ const STRINGS = {
       tags: ['Incidents', 'Hardware', 'AVD', 'KROLL', 'Access', 'Onboarding', 'Offboarding', 'Materials'],
     },
     topbar: {
-      searchPlaceholder: 'Search tickets, people, categories…',
+      searchPlaceholder: 'Search tickets, help articles, services…',
       searchAria: 'Search tickets',
       clearSearch: 'Clear search',
     },
@@ -87,6 +87,67 @@ const STRINGS = {
       reportsBannerTitle: 'KPI & Reporting',
       reportsBannerHint: 'SLA, trends, top incidents, and weekly email report.',
       reportsBannerAction: 'Open dashboard',
+      heroEyebrow: 'PMG Helpdesk',
+      heroCtaIncident: 'Report an incident',
+      heroCtaService: 'Request a service',
+      heroCtaInbox: 'Team inbox',
+      heroCtaReports: 'KPI dashboard',
+      supportHours: 'IT support · Mon–Fri 7am–6pm',
+      quickAccess: 'Quick access',
+      tabIncidents: 'Incidents',
+      tabServices: 'Services',
+      portalBrowse: 'Browse the catalog or use quick access above.',
+      heroSearchPrompt: 'How can we help you today?',
+      searchPlaceholder: 'Search tickets, help articles, services…',
+      searchButton: 'Search',
+      searchSuggestions: 'Popular:',
+      searchSectionActions: 'Quick actions',
+      searchSectionArticles: 'Help articles',
+      searchSectionTickets: 'Tickets',
+      searchNoResults: 'No results. Try another term or report an incident.',
+      searchFeaturedArticles: 'Popular articles',
+      viewArticle: 'View article',
+      articleModalReport: 'Report related issue',
+      articleModalClose: 'Close',
+      serviceNotFound: 'This service request is not available.',
+    },
+    helpArticles: {
+      'printer-offline': {
+        title: 'Printer offline — what to do',
+        excerpt: 'Check power, network, and the print queue before opening a ticket.',
+        keywords: 'printer imprimante offline hors ligne print queue file',
+        body: '1. Confirm the printer is on and shows Ready on its panel.\n2. Restart the print spooler or sign out and back into Windows.\n3. Try printing a test page from Windows Settings.\n4. If the issue affects Kroll printing, note the workstation and floor in your ticket.',
+      },
+      'password-reset': {
+        title: 'Reset your Windows password',
+        excerpt: 'Self-service and helpdesk options for locked or expired passwords.',
+        keywords: 'password mot de passe windows login connexion reset',
+        body: 'Use the company self-service portal if you are on VPN or on-site.\nIf you are locked out, contact the helpdesk with your employee ID and department.\nNever share your password by email or chat.',
+      },
+      'avd-home': {
+        title: 'Connect to AVD from home',
+        excerpt: 'Remote Desktop client, MFA, and common connection errors.',
+        keywords: 'avd remote bureau virtuel home maison rdp mfa',
+        body: 'Install Microsoft Remote Desktop from the company software catalog.\nOpen the published AVD feed URL and sign in with MFA.\nIf the session freezes, disconnect and reconnect before opening a ticket.',
+      },
+      'kroll-slow': {
+        title: 'Kroll is slow or frozen',
+        excerpt: 'First checks before escalating to pharmacy systems support.',
+        keywords: 'kroll slow lent frozen gelé pharmacy pharmacie',
+        body: 'Close other heavy applications on the workstation.\nClear browser cache if using the web client.\nNote whether the issue affects one user or the whole floor — this sets priority.',
+      },
+      'access-request': {
+        title: 'Request application access',
+        excerpt: 'SharePoint, drives, distribution lists, and third-party apps.',
+        keywords: 'access accès sharepoint email liste distribution permission',
+        body: 'Use the Access request form from the service portal.\nInclude the application name, business justification, and your manager.\nAccess is provisioned after approval — allow 1–2 business days.',
+      },
+      'ringcentral-setup': {
+        title: 'Set up RingCentral softphone',
+        excerpt: 'Headset, audio devices, and first-time login.',
+        keywords: 'ringcentral phone téléphone softphone audio casque',
+        body: 'Install RingCentral from the software catalog and sign in with SSO.\nSet your default microphone and speaker in RingCentral settings.\nTest with a colleague before patient-facing calls.',
+      },
     },
     dynamicForm: {
       title: 'Report a problem',
@@ -858,7 +919,7 @@ const STRINGS = {
       tags: ['Incidents', 'Matériel', 'AVD', 'KROLL', 'Accès', 'Intégration', 'Départ', 'Matériel bureau'],
     },
     topbar: {
-      searchPlaceholder: 'Rechercher tickets, personnes, catégories…',
+      searchPlaceholder: 'Rechercher tickets, articles, services…',
       searchAria: 'Rechercher des tickets',
       clearSearch: 'Effacer la recherche',
     },
@@ -901,6 +962,67 @@ const STRINGS = {
       reportsBannerTitle: 'KPI et reporting',
       reportsBannerHint: 'SLA, tendances, top incidents et rapport hebdomadaire par courriel.',
       reportsBannerAction: 'Ouvrir le tableau de bord',
+      heroEyebrow: 'Portail de support TI',
+      heroCtaIncident: 'Signaler un incident',
+      heroCtaService: 'Demander un service',
+      heroCtaInbox: 'Boîte de réception',
+      heroCtaReports: 'Tableau KPI',
+      supportHours: 'Support TI · Lun–Ven 7h–18h',
+      quickAccess: 'Accès rapide',
+      tabIncidents: 'Incidents',
+      tabServices: 'Services',
+      portalBrowse: 'Parcourez le catalogue ou utilisez les accès rapides ci-dessus.',
+      heroSearchPrompt: 'Comment pouvons-nous vous aider ?',
+      searchPlaceholder: 'Rechercher tickets, articles, services…',
+      searchButton: 'Rechercher',
+      searchSuggestions: 'Populaire :',
+      searchSectionActions: 'Actions rapides',
+      searchSectionArticles: 'Articles d\'aide',
+      searchSectionTickets: 'Tickets',
+      searchNoResults: 'Aucun résultat. Essayez un autre terme ou signalez un incident.',
+      searchFeaturedArticles: 'Articles populaires',
+      viewArticle: 'Voir l\'article',
+      articleModalReport: 'Signaler un incident lié',
+      articleModalClose: 'Fermer',
+      serviceNotFound: 'Cette demande de service n\'est pas disponible.',
+    },
+    helpArticles: {
+      'printer-offline': {
+        title: 'Imprimante hors ligne — que faire',
+        excerpt: 'Vérifiez l\'alimentation, le réseau et la file d\'impression avant d\'ouvrir un ticket.',
+        keywords: 'imprimante printer offline hors ligne print file impression',
+        body: '1. Confirmez que l\'imprimante est allumée et affiche Prêt sur le panneau.\n2. Redémarrez le spouleur d\'impression ou déconnectez-vous de Windows.\n3. Essayez une page test depuis les paramètres Windows.\n4. Si l\'impression Kroll est touchée, précisez le poste et l\'étage dans le ticket.',
+      },
+      'password-reset': {
+        title: 'Réinitialiser votre mot de passe Windows',
+        excerpt: 'Libre-service et options via le support pour compte verrouillé ou expiré.',
+        keywords: 'mot de passe password windows connexion login reset',
+        body: 'Utilisez le portail libre-service si vous êtes sur le VPN ou sur site.\nSi vous êtes bloqué, contactez le support avec votre identifiant et département.\nNe communiquez jamais votre mot de passe par courriel ou clavardage.',
+      },
+      'avd-home': {
+        title: 'Se connecter à AVD depuis la maison',
+        excerpt: 'Client Bureau à distance, MFA et erreurs de connexion courantes.',
+        keywords: 'avd remote bureau virtuel maison home rdp mfa',
+        body: 'Installez Microsoft Remote Desktop depuis le catalogue logiciel.\nOuvrez l\'URL du flux AVD publié et connectez-vous avec MFA.\nSi la session se fige, déconnectez-vous avant d\'ouvrir un ticket.',
+      },
+      'kroll-slow': {
+        title: 'Kroll est lent ou gelé',
+        excerpt: 'Vérifications avant d\'escalader vers le support systèmes pharmacie.',
+        keywords: 'kroll slow lent frozen gelé pharmacy pharmacie',
+        body: 'Fermez les autres applications lourdes sur le poste.\nVidez le cache du navigateur si vous utilisez le client web.\nPrécisez si un seul utilisateur ou tout l\'étage est touché — cela définit la priorité.',
+      },
+      'access-request': {
+        title: 'Demander un accès applicatif',
+        excerpt: 'SharePoint, lecteurs réseau, listes de distribution et apps tierces.',
+        keywords: 'accès access sharepoint courriel liste distribution permission',
+        body: 'Utilisez le formulaire Accès du portail de services.\nIndiquez l\'application, la justification métier et votre gestionnaire.\nL\'accès est accordé après approbation — prévoir 1 à 2 jours ouvrables.',
+      },
+      'ringcentral-setup': {
+        title: 'Configurer RingCentral (softphone)',
+        excerpt: 'Casque, périphériques audio et première connexion.',
+        keywords: 'ringcentral téléphone phone softphone audio casque',
+        body: 'Installez RingCentral depuis le catalogue et connectez-vous avec SSO.\nDéfinissez le micro et haut-parleur par défaut dans les paramètres.\nTestez avec un collègue avant les appels patients.',
+      },
     },
     dynamicForm: {
       title: 'Signaler un problème',
@@ -1707,6 +1829,30 @@ function getLocalizedPortalIncident(portalId, lang) {
   };
 }
 
+function getLocalizedHelpArticle(articleId, lang) {
+  const a = STRINGS[lang]?.helpArticles?.[articleId] || STRINGS.en?.helpArticles?.[articleId];
+  const base = window.PMG_DATA?.HELP_ARTICLES?.find(x => x.id === articleId);
+  return {
+    ...base,
+    id: articleId,
+    title: a?.title || articleId,
+    excerpt: a?.excerpt || '',
+    body: a?.body || '',
+    keywords: a?.keywords || '',
+    icon: base?.icon || 'file-text',
+    portalId: base?.portalId || null,
+    popular: base?.popular || false,
+  };
+}
+
+function helpArticleMatchesSearch(articleId, query, lang) {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return true;
+  const art = getLocalizedHelpArticle(articleId, lang);
+  const haystack = [art.title, art.excerpt, art.body, art.keywords, art.id].filter(Boolean).join(' ').toLowerCase();
+  return haystack.includes(q);
+}
+
 function getLocalizedService(serviceId, lang) {
   const keyMap = {
     'special-it': 'specialIt',
@@ -1757,6 +1903,7 @@ function LangSwitch({ style }) {
 }
 
 Object.assign(window, {
-  I18nProvider, useI18n, STRINGS, getNested, getLocalizedCategory, getLocalizedPortalIncident, getLocalizedService,
+  I18nProvider, useI18n, STRINGS, getNested, getLocalizedCategory, getLocalizedPortalIncident,
+  getLocalizedHelpArticle, helpArticleMatchesSearch, getLocalizedService,
   getStatusLabel, getPriorityLabel, LangSwitch,
 });
