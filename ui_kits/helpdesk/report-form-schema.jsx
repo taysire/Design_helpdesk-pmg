@@ -727,7 +727,7 @@ function buildTicketFromAnswers(answers, t, portalCategoryFallback) {
   const category = preset?.ticketCategory || mapProblemAreaToCategory(answers.problem_area);
 
   return {
-    id: 'INC-' + String(Math.floor(2050 + Math.random() * 100)).padStart(4, '0'),
+    ticketType: 'incident',
     title: title || t('newTicket.untitled'),
     category,
     priority: mapUsersAffectedToPriority(answers.users_affected),
@@ -739,7 +739,7 @@ function buildTicketFromAnswers(answers, t, portalCategoryFallback) {
     body,
     jira: null,
     slack: null,
-    formAnswers: { ...answers },
+    formAnswers: { _portalCategory: portalKey, ...answers },
     activity: [{ who: 'me', kind: 'opened', text: 'Signalement via formulaire dynamique', at: 'just now' }],
   };
 }

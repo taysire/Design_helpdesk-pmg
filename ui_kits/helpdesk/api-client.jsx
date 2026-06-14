@@ -10,9 +10,9 @@ function getApiBase() {
 
 function inferTicketType(ticket) {
   if (ticket.ticketType || ticket.ticket_type) return ticket.ticketType || ticket.ticket_type;
-  const id = (ticket.id || '').toUpperCase();
-  if (id.startsWith('REQ') || id.startsWith('ONB') || id.startsWith('OFF')) return 'service';
   if (ticket.serviceId || ticket.service_id) return 'service';
+  const id = (ticket.id || '').toUpperCase();
+  if (id.startsWith('REQ') || id.startsWith('ONB') || id.startsWith('OFF') || id.startsWith('EQP')) return 'service';
   return 'incident';
 }
 
@@ -47,8 +47,7 @@ function apiActivityToUi(activity) {
 }
 
 function uiTicketToApi(ticket) {
-  return {
-    id: ticket.id || undefined,
+  const payload = {
     ticket_type: inferTicketType(ticket),
     title: ticket.title,
     category: ticket.category || null,
@@ -64,6 +63,8 @@ function uiTicketToApi(ticket) {
     jira_key: ticket.jira || null,
     slack_channel: ticket.slack || null,
   };
+  if (ticket.id && ticket._serverId) payload.id = ticket.id;
+  return payload;
 }
 
 function apiTicketToUi(api) {
@@ -71,9 +72,12 @@ function apiTicketToUi(api) {
   const activities = (api.activities || []).map(apiActivityToUi);
   return {
     id: api.id,
+    _serverId: true,
+    ticketType: api.ticket_type,
     title: api.title,
     category: api.category,
     serviceId: api.service_id,
+    requestType: api.request_type,
     priority: api.priority,
     status: normalizeStatus(api.status),
     reporter,
@@ -129,6 +133,23 @@ async function fetchTicketsFromApi(params = {}) {
 async function fetchTicketFromApi(ticketId) {
   const item = await apiRequest(`/api/tickets/${encodeURIComponent(ticketId)}`);
   return apiTicketToUi(item);
+}
+
+function ensureLocalTicketId(ticket) {
+  if (ticket.id) return ticket;
+  const servicePrefixes = {
+    'special-it': 'REQ',
+    'employee-arrival': 'ONB',
+    'employee-departure': 'OFF',
+    'it-equipment': 'EQP',
+  };
+  const prefix = ticket.ticketType === 'service'
+    ? (servicePrefixes[ticket.serviceId] || 'REQ')
+    : 'INC';
+  return {
+    ...ticket,
+    id: `${prefix}-${String(Math.floor(1000 + Math.random() * 9000))}`,
+  };
 }
 
 async function createTicketViaApi(ticket) {
@@ -188,4 +209,5 @@ Object.assign(window, {
   addCommentViaApi,
   uiTicketToApi,
   apiTicketToUi,
+  ensureLocalTicketId,
 });

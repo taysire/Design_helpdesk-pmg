@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.data.portal_catalog import SERVICE_ID_PREFIX
 from app.db.session import get_db
 from app.models.ticket import Ticket
 from app.schemas.ticket import CommentCreate, TicketCreate, TicketRead, TicketUpdate
@@ -18,8 +19,11 @@ from app.services.lifecycle import (
 router = APIRouter(prefix="/api/tickets", tags=["tickets"])
 
 
-def _next_ticket_id(ticket_type: str) -> str:
-    prefix = "REQ" if ticket_type == "service" else "INC"
+def _next_ticket_id(ticket_type: str, service_id: str | None = None) -> str:
+    if ticket_type == "service":
+        prefix = SERVICE_ID_PREFIX.get(service_id or "", "REQ")
+    else:
+        prefix = "INC"
     suffix = uuid.uuid4().hex[:4].upper()
     return f"{prefix}-{suffix}"
 
@@ -43,6 +47,7 @@ def list_tickets(
     priority: str | None = Query(default=None),
     reporter_id: str | None = Query(default=None),
     assignee_id: str | None = Query(default=None),
+    service_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[Ticket]:
     stmt = select(Ticket).options(selectinload(Ticket.activities)).order_by(Ticket.created_at.desc())
@@ -66,6 +71,8 @@ def list_tickets(
         stmt = stmt.where(Ticket.reporter_id == reporter_id)
     if assignee_id:
         stmt = stmt.where(Ticket.assignee_id == assignee_id)
+    if service_id:
+        stmt = stmt.where(Ticket.service_id == service_id)
 
     return list(db.scalars(stmt).all())
 
@@ -77,7 +84,7 @@ def get_ticket(ticket_id: str, db: Session = Depends(get_db)) -> Ticket:
 
 @router.post("", response_model=TicketRead, status_code=201)
 def create_ticket(payload: TicketCreate, db: Session = Depends(get_db)) -> Ticket:
-    ticket_id = payload.id or _next_ticket_id(payload.ticket_type)
+    ticket_id = payload.id or _next_ticket_id(payload.ticket_type, payload.service_id)
     if db.get(Ticket, ticket_id):
         raise HTTPException(status_code=409, detail="Ticket id already exists")
 

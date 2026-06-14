@@ -88,3 +88,54 @@ def test_assign_ticket(client: TestClient):
     res = client.patch(f"/api/tickets/{ticket_id}", json={"assignee_id": "jd"})
     assert res.status_code == 200
     assert res.json()["assignee_id"] == "jd"
+
+
+def test_imprimante_incident_flow(client: TestClient):
+    payload = {
+        "ticket_type": "incident",
+        "title": "Imprimante — Connexion avec Kroll",
+        "category": "hardware",
+        "priority": "P3",
+        "reporter_id": "me",
+        "body": "Imprimante 3e etage hors ligne",
+        "form_answers": {
+            "_portalCategory": "imprimante",
+            "problem_area": "Imprimante",
+            "printer_problem": "Connexion avec Kroll",
+            "users_affected": "Juste moi",
+            "department": "Administration",
+        },
+    }
+    res = client.post("/api/tickets", json=payload)
+    assert res.status_code == 201, res.text
+    created = res.json()
+    assert created["id"].startswith("INC-")
+    assert created["form_answers"]["_portalCategory"] == "imprimante"
+
+    res = client.get("/api/tickets", params={"category": "hardware", "q": "Imprimante"})
+    assert res.status_code == 200
+    assert any(t["id"] == created["id"] for t in res.json())
+
+
+def test_it_equipment_service_flow(client: TestClient):
+    payload = {
+        "ticket_type": "service",
+        "title": "Demande de materiel informatique — Remplacement",
+        "category": "service",
+        "service_id": "it-equipment",
+        "request_type": "equipment",
+        "priority": "P4",
+        "reporter_id": "me",
+        "body": "Remplacement laptop",
+        "form_answers": {"_equipmentWizard": True, "requestType": "replacement"},
+    }
+    res = client.post("/api/tickets", json=payload)
+    assert res.status_code == 201, res.text
+    created = res.json()
+    assert created["id"].startswith("EQP-")
+    assert created["service_id"] == "it-equipment"
+
+    res = client.get("/api/tickets", params={"service_id": "it-equipment"})
+    assert res.status_code == 200
+    assert any(t["id"] == created["id"] for t in res.json())
+

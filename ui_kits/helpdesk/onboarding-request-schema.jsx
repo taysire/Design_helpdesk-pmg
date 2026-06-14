@@ -111,7 +111,7 @@ function buildOnboardingTicket(answers, t, lang) {
   const formAnswers = { _onboardingWizard: true, ...answers };
 
   return {
-    id: 'ONB-' + String(Math.floor(4200 + Math.random() * 100)).padStart(4, '0'),
+    ticketType: 'service',
     title,
     category: 'onboard',
     serviceId: 'employee-arrival',

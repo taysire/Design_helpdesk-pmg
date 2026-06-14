@@ -197,7 +197,7 @@ function buildSpecialItTicket(answers, t) {
   };
 
   return {
-    id: 'REQ-' + String(Math.floor(8100 + Math.random() * 100)).padStart(4, '0'),
+    ticketType: 'service',
     title,
     category: 'service',
     serviceId: 'special-it',

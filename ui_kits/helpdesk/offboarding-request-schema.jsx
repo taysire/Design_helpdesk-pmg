@@ -150,7 +150,7 @@ function buildOffboardingTicket(answers, t, lang) {
   const formAnswers = { _offboardingWizard: true, ...answers };
 
   return {
-    id: 'OFF-' + String(Math.floor(9000 + Math.random() * 100)).padStart(4, '0'),
+    ticketType: 'service',
     title,
     category: 'offboard',
     serviceId: 'employee-departure',

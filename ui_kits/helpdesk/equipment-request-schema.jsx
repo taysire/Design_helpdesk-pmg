@@ -89,7 +89,7 @@ function buildITEquipmentTicket(answers, t) {
   const title = `${t('services.itEquipment.label')} — ${typeLabel}`.slice(0, 120);
 
   return {
-    id: 'EQP-' + String(Math.floor(9000 + Math.random() * 100)).padStart(4, '0'),
+    ticketType: 'service',
     title,
     category: 'service',
     serviceId: 'it-equipment',
