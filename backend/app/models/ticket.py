@@ -3,7 +3,7 @@ from typing import Any
 
 from sqlalchemy import DateTime, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -34,4 +34,11 @@ class Ticket(Base):
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    activities: Mapped[list["TicketActivity"]] = relationship(
+        "TicketActivity",
+        back_populates="ticket",
+        order_by="TicketActivity.created_at",
+        cascade="all, delete-orphan",
     )

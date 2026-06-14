@@ -27,7 +27,7 @@
 <script type="text/babel" src="data.jsx?v=14"></script>
 <script type="text/babel" src="i18n.jsx?v=19"></script>
 <script type="text/babel" src="ticket-lifecycle.jsx?v=10"></script>
-<script type="text/babel" src="api-client.jsx?v=1"></script>
+<script type="text/babel" src="api-client.jsx?v=2"></script>
 <script type="text/babel" src="helpdesk-analytics.jsx?v=3"></script>
 <script type="text/babel" src="components.jsx?v=11"></script>
 <script type="text/babel" src="tweaks-panel.jsx"></script>
@@ -193,7 +193,24 @@ function SignedInApp({ role, apiOnline, onRoleChange, onSignOut }) {
     setView(nextView);
     setOpenId(null);
   }, []);
-  const openTicket = (id) => { setOpenId(id); setView('detail'); };
+
+  const patchTicket = (id, updater) => {
+    setTickets(prev => prev.map(tk => tk.id === id ? updater({ ...tk }) : tk));
+  };
+
+  const openTicket = async (id) => {
+    setOpenId(id);
+    setView('detail');
+    if (apiOnline) {
+      try {
+        const detail = await fetchTicketFromApi(id);
+        patchTicket(id, () => detail);
+      } catch (e) {
+        showToast('info', lang === 'fr' ? 'Erreur API' : 'API error',
+          lang === 'fr' ? 'Detail non recharge depuis le serveur.' : 'Could not reload detail from server.');
+      }
+    }
+  };
   const back = () => { setOpenId(null); if (view==='detail') setView('home'); };
   const activeServiceId = view.startsWith('service:') ? view.slice('service:'.length) : null;
 
@@ -213,10 +230,6 @@ function SignedInApp({ role, apiOnline, onRoleChange, onSignOut }) {
     }
   };
 
-  const patchTicket = (id, updater) => {
-    setTickets(prev => prev.map(tk => tk.id === id ? updater({ ...tk }) : tk));
-  };
-
   const submitTicket = async (ticket) => {
     const withActivity = {
       ...ticket,
@@ -229,14 +242,8 @@ function SignedInApp({ role, apiOnline, onRoleChange, onSignOut }) {
     if (apiOnline) {
       try {
         const saved = await createTicketViaApi(withActivity);
-        const merged = {
-          ...saved,
-          activity: withActivity.activity,
-          opened: saved.opened || 'just now',
-          updated: saved.updated || 'just now',
-        };
-        setTickets(prev => [merged, ...prev]);
-        showToast('success', t('toast.submittedTitle'), t('toast.submittedBody', { id: merged.id }));
+        setTickets(prev => [saved, ...prev]);
+        showToast('success', t('toast.submittedTitle'), t('toast.submittedBody', { id: saved.id }));
         setView('home');
         setOpenId(null);
         return;
@@ -252,14 +259,25 @@ function SignedInApp({ role, apiOnline, onRoleChange, onSignOut }) {
     setOpenId(null);
   };
 
-  const changeTicketStatus = (id, newStatus) => {
+  const changeTicketStatus = async (id, newStatus) => {
     const tk = tickets.find(x => x.id === id);
     if (!tk) return;
     const oldStatus = normalizeStatus(tk.status);
     const next = normalizeStatus(newStatus);
     if (oldStatus === next) return;
 
-    patchTicket(id, t => applyStatusChange(t, next, 'me'));
+    if (apiOnline) {
+      try {
+        const saved = await updateTicketViaApi(id, { status: next });
+        patchTicket(id, () => saved);
+      } catch (e) {
+        showToast('info', lang === 'fr' ? 'Erreur API' : 'API error',
+          lang === 'fr' ? 'Statut non enregistre.' : 'Status not saved.');
+        return;
+      }
+    } else {
+      patchTicket(id, t => applyStatusChange(t, next, 'me'));
+    }
 
     showToast('success', t('toast.statusTitle'), t('toast.statusBody', {
       id, status: t(`status.${next}`),
@@ -273,16 +291,46 @@ function SignedInApp({ role, apiOnline, onRoleChange, onSignOut }) {
     }
   };
 
-  const addTicketComment = (id, text) => {
+  const addTicketComment = async (id, text) => {
     const authorRole = role === 'enduser' ? 'enduser' : 'it';
+
+    if (apiOnline) {
+      try {
+        const saved = await addCommentViaApi(id, { text, author_role: authorRole, who_id: 'me' });
+        patchTicket(id, () => saved);
+        showToast('success', t('toast.commentTitle'), '');
+        return;
+      } catch (e) {
+        showToast('info', lang === 'fr' ? 'Erreur API' : 'API error',
+          lang === 'fr' ? 'Commentaire non enregistre.' : 'Comment not saved.');
+        return;
+      }
+    }
+
     patchTicket(id, t => applyComment(t, text, 'me', authorRole));
     showToast('success', t('toast.commentTitle'), '');
   };
 
-  const reopenTicket = (id) => {
+  const reopenTicket = async (id) => {
     const tk = tickets.find(x => x.id === id);
     if (!tk) return;
-    patchTicket(id, t => applyReopen(t, 'me', null, t));
+
+    if (apiOnline) {
+      try {
+        const saved = await updateTicketViaApi(id, {
+          status: 'inprog',
+          reopen_note: t('lifecycle.reopenedNote'),
+        });
+        patchTicket(id, () => saved);
+      } catch (e) {
+        showToast('info', lang === 'fr' ? 'Erreur API' : 'API error',
+          lang === 'fr' ? 'Reouverture non enregistree.' : 'Reopen not saved.');
+        return;
+      }
+    } else {
+      patchTicket(id, t => applyReopen(t, 'me', null, t));
+    }
+
     showToast('success', t('toast.reopenedTitle'), t('toast.reopenedBody'));
     const notif = getReopenNotification(t, tk);
     if (notif && isIt) {
@@ -290,7 +338,18 @@ function SignedInApp({ role, apiOnline, onRoleChange, onSignOut }) {
     }
   };
 
-  const assignTicket = (id, assigneeId) => {
+  const assignTicket = async (id, assigneeId) => {
+    if (apiOnline) {
+      try {
+        const saved = await updateTicketViaApi(id, { assignee: assigneeId });
+        patchTicket(id, () => saved);
+        return;
+      } catch (e) {
+        showToast('info', lang === 'fr' ? 'Erreur API' : 'API error',
+          lang === 'fr' ? 'Assignation non enregistree.' : 'Assignment not saved.');
+        return;
+      }
+    }
     patchTicket(id, t => ({ ...t, assignee: assigneeId, updated: formatTicketUpdated() }));
   };
 

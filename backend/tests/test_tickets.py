@@ -18,22 +18,73 @@ def client():
     return TestClient(app)
 
 
-def test_create_and_list_ticket(client: TestClient):
+def _create_ticket(client: TestClient, title: str = "Test ticket", **extra) -> dict:
     payload = {
         "ticket_type": "incident",
-        "title": "Test pytest — KROLL lent",
-        "category": "kroll",
-        "priority": "P2",
+        "title": title,
+        "category": "hardware",
+        "priority": "P3",
         "reporter_id": "me",
         "body": "Created by pytest",
+        **extra,
     }
     res = client.post("/api/tickets", json=payload)
     assert res.status_code == 201, res.text
-    created = res.json()
+    return res.json()
+
+
+def test_create_and_list_ticket(client: TestClient):
+    created = _create_ticket(client, "Test pytest — KROLL lent", category="kroll", priority="P2")
     assert created["id"].startswith("INC-")
-    assert created["title"] == payload["title"]
+    assert created["activities"]
+    assert created["activities"][0]["kind"] == "opened"
 
     res = client.get("/api/tickets")
     assert res.status_code == 200
     ids = [t["id"] for t in res.json()]
     assert created["id"] in ids
+
+
+def test_patch_status_and_comment(client: TestClient):
+    created = _create_ticket(client, "Printer offline")
+    ticket_id = created["id"]
+
+    res = client.patch(f"/api/tickets/{ticket_id}", json={"status": "inprog"})
+    assert res.status_code == 200, res.text
+    updated = res.json()
+    assert updated["status"] == "inprog"
+    kinds = [a["kind"] for a in updated["activities"]]
+    assert "status_change" in kinds
+
+    res = client.post(
+        f"/api/tickets/{ticket_id}/comments",
+        json={"text": "Looking into it", "who_id": "jd", "author_role": "it"},
+    )
+    assert res.status_code == 201, res.text
+    commented = res.json()
+    assert any(a["kind"] == "comment" for a in commented["activities"])
+    assert commented["first_response_at"] is not None
+
+    res = client.patch(f"/api/tickets/{ticket_id}", json={"status": "resolved"})
+    assert res.status_code == 200
+    assert res.json()["resolved_at"] is not None
+
+
+def test_search_tickets(client: TestClient):
+    created = _create_ticket(client, "Unique search marker XYZ-123")
+    res = client.get("/api/tickets", params={"q": "XYZ-123"})
+    assert res.status_code == 200
+    ids = [t["id"] for t in res.json()]
+    assert created["id"] in ids
+
+    res = client.get("/api/tickets", params={"q": "no-match-zzzz"})
+    assert res.status_code == 200
+    assert res.json() == []
+
+
+def test_assign_ticket(client: TestClient):
+    created = _create_ticket(client, "Assign me")
+    ticket_id = created["id"]
+    res = client.patch(f"/api/tickets/{ticket_id}", json={"assignee_id": "jd"})
+    assert res.status_code == 200
+    assert res.json()["assignee_id"] == "jd"
