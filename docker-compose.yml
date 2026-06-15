@@ -34,6 +34,13 @@ services:
       DATABASE_URL: postgresql+psycopg://pmg:pmg_dev@db:5432/pmg_helpdesk
       REDIS_URL: redis://redis:6379/0
       API_CORS_ORIGINS: http://127.0.0.1:8888,http://localhost:8888,http://127.0.0.1:5173,http://localhost:5173
+      NOTIFICATIONS_ENABLED: "true"
+      NOTIFY_EMAIL_MODE: log
+      NOTIFY_JIRA_ENABLED: "true"
+      NOTIFY_JIRA_MODE: log
+      NOTIFY_JIRA_PROJECT: PHARM
+      NOTIFY_JIRA_CATEGORIES: kroll,pharmacy
+      NOTIFY_SLACK_CHANNEL: "#ithelp"
     ports:
       - "8001:8000"
     volumes:

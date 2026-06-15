@@ -30,7 +30,7 @@ def _create_ticket(client: TestClient, title: str = "Test ticket", **extra) -> d
     }
     res = client.post("/api/tickets", json=payload)
     assert res.status_code == 201, res.text
-    return res.json()
+    return res.json()["ticket"]
 
 
 def test_create_and_list_ticket(client: TestClient):
@@ -51,7 +51,7 @@ def test_patch_status_and_comment(client: TestClient):
 
     res = client.patch(f"/api/tickets/{ticket_id}", json={"status": "inprog"})
     assert res.status_code == 200, res.text
-    updated = res.json()
+    updated = res.json()["ticket"]
     assert updated["status"] == "inprog"
     kinds = [a["kind"] for a in updated["activities"]]
     assert "status_change" in kinds
@@ -61,13 +61,13 @@ def test_patch_status_and_comment(client: TestClient):
         json={"text": "Looking into it", "who_id": "jd", "author_role": "it"},
     )
     assert res.status_code == 201, res.text
-    commented = res.json()
+    commented = res.json()["ticket"]
     assert any(a["kind"] == "comment" for a in commented["activities"])
     assert commented["first_response_at"] is not None
 
     res = client.patch(f"/api/tickets/{ticket_id}", json={"status": "resolved"})
     assert res.status_code == 200
-    assert res.json()["resolved_at"] is not None
+    assert res.json()["ticket"]["resolved_at"] is not None
 
 
 def test_search_tickets(client: TestClient):
@@ -87,7 +87,7 @@ def test_assign_ticket(client: TestClient):
     ticket_id = created["id"]
     res = client.patch(f"/api/tickets/{ticket_id}", json={"assignee_id": "jd"})
     assert res.status_code == 200
-    assert res.json()["assignee_id"] == "jd"
+    assert res.json()["ticket"]["assignee_id"] == "jd"
 
 
 def test_imprimante_incident_flow(client: TestClient):
@@ -108,7 +108,7 @@ def test_imprimante_incident_flow(client: TestClient):
     }
     res = client.post("/api/tickets", json=payload)
     assert res.status_code == 201, res.text
-    created = res.json()
+    created = res.json()["ticket"]
     assert created["id"].startswith("INC-")
     assert created["form_answers"]["_portalCategory"] == "imprimante"
 
@@ -131,11 +131,10 @@ def test_it_equipment_service_flow(client: TestClient):
     }
     res = client.post("/api/tickets", json=payload)
     assert res.status_code == 201, res.text
-    created = res.json()
+    created = res.json()["ticket"]
     assert created["id"].startswith("EQP-")
     assert created["service_id"] == "it-equipment"
 
     res = client.get("/api/tickets", params={"service_id": "it-equipment"})
     assert res.status_code == 200
     assert any(t["id"] == created["id"] for t in res.json())
-

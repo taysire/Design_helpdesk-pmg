@@ -10,9 +10,22 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     api_cors_origins: str = "http://127.0.0.1:8888,http://localhost:8888"
 
+    notifications_enabled: bool = True
+    notify_email_mode: str = "log"
+    notify_slack_webhook_url: str = ""
+    notify_slack_channel: str = "#ithelp"
+    notify_jira_enabled: bool = True
+    notify_jira_mode: str = "log"
+    notify_jira_project: str = "PHARM"
+    notify_jira_categories: str = "kroll,pharmacy"
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.api_cors_origins.split(",") if o.strip()]
+
+    @property
+    def jira_categories_list(self) -> list[str]:
+        return [c.strip() for c in self.notify_jira_categories.split(",") if c.strip()]
 
 
 @lru_cache

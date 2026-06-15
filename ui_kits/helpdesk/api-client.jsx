@@ -152,13 +152,23 @@ function ensureLocalTicketId(ticket) {
   };
 }
 
+function parseTicketActionResponse(data) {
+  if (data && data.ticket) {
+    return {
+      ticket: apiTicketToUi(data.ticket),
+      notifications: data.notifications || [],
+    };
+  }
+  return { ticket: apiTicketToUi(data), notifications: [] };
+}
+
 async function createTicketViaApi(ticket) {
-  const item = await apiRequest('/api/tickets', {
+  const data = await apiRequest('/api/tickets', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(uiTicketToApi(ticket)),
   });
-  return apiTicketToUi(item);
+  return parseTicketActionResponse(data);
 }
 
 async function updateTicketViaApi(ticketId, patch) {
@@ -170,21 +180,25 @@ async function updateTicketViaApi(ticketId, patch) {
   if (patch.title != null) body.title = patch.title;
   if (patch.reopen_note != null) body.reopen_note = patch.reopen_note;
 
-  const item = await apiRequest(`/api/tickets/${encodeURIComponent(ticketId)}`, {
+  const data = await apiRequest(`/api/tickets/${encodeURIComponent(ticketId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return apiTicketToUi(item);
+  return parseTicketActionResponse(data);
 }
 
 async function addCommentViaApi(ticketId, { text, who_id = 'me', author_role = 'it' }) {
-  const item = await apiRequest(`/api/tickets/${encodeURIComponent(ticketId)}/comments`, {
+  const data = await apiRequest(`/api/tickets/${encodeURIComponent(ticketId)}/comments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, who_id, author_role }),
   });
-  return apiTicketToUi(item);
+  return parseTicketActionResponse(data);
+}
+
+async function fetchTicketNotifications(ticketId) {
+  return apiRequest(`/api/notifications?ticket_id=${encodeURIComponent(ticketId)}`);
 }
 
 const PMG_API = {
@@ -192,9 +206,9 @@ const PMG_API = {
   checkHealth: checkApiHealth,
   fetchTickets: fetchTicketsFromApi,
   fetchTicket: fetchTicketFromApi,
-  createTicket: createTicketViaApi,
-  updateTicket: updateTicketViaApi,
-  addComment: addCommentViaApi,
+  createTicket: async (ticket) => (await createTicketViaApi(ticket)).ticket,
+  updateTicket: async (id, patch) => (await updateTicketViaApi(id, patch)).ticket,
+  addComment: async (id, payload) => (await addCommentViaApi(id, payload)).ticket,
   toApi: uiTicketToApi,
   fromApi: apiTicketToUi,
 };
@@ -210,4 +224,6 @@ Object.assign(window, {
   uiTicketToApi,
   apiTicketToUi,
   ensureLocalTicketId,
+  parseTicketActionResponse,
+  fetchTicketNotifications,
 });
