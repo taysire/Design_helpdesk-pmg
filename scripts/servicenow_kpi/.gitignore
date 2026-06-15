@@ -1,0 +1,6 @@
+.env
+.charts_cache/
+*.csv
+exports/
+__pycache__/
+*.pyc
