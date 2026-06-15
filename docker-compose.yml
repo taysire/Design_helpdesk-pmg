@@ -41,6 +41,9 @@ services:
       NOTIFY_JIRA_PROJECT: PHARM
       NOTIFY_JIRA_CATEGORIES: kroll,pharmacy
       NOTIFY_SLACK_CHANNEL: "#ithelp"
+      AUTH_MODE: dev
+      AUTH_DEV_USER_ID: me
+      AUTH_DEV_ROLE: it
     ports:
       - "8001:8000"
     volumes:

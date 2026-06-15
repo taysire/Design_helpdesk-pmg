@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     notify_jira_project: str = "PHARM"
     notify_jira_categories: str = "kroll,pharmacy"
 
+    auth_mode: str = "dev"
+    entra_tenant_id: str = ""
+    entra_client_id: str = ""
+    entra_audience: str = ""
+    entra_api_scope: str = ""
+    auth_dev_user_id: str = "me"
+    auth_dev_role: str = "it"
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.api_cors_origins.split(",") if o.strip()]

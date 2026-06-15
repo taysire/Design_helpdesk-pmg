@@ -1,15 +1,37 @@
 // Login — Microsoft tenant sign-in gate (PMG)
 
-function Login({ onSignIn }) {
+function Login({ onSignIn, authConfig, defaultRole = 'it' }) {
   const { t, lang } = useI18n();
   const [step, setStep] = React.useState('idle'); // idle | picker | signing
   const [hoverMS, setHoverMS] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const entraReady = authConfig?.entra_configured && authConfig?.mode === 'entra';
   const tags = STRINGS[lang]?.login?.tags || STRINGS.en.login.tags;
 
-  const start = () => setStep('picker');
-  const pick = () => {
+  const start = () => {
+    setError('');
+    if (entraReady) {
+      setStep('signing');
+      signInEntra()
+        .then(user => onSignIn && onSignIn(user))
+        .catch(e => {
+          setStep('idle');
+          setError(e?.message || (lang === 'fr' ? 'Connexion impossible' : 'Sign-in failed'));
+        });
+      return;
+    }
+    setStep('picker');
+  };
+
+  const pick = (profile) => {
     setStep('signing');
-    setTimeout(() => onSignIn({ id:'me', name:'You', email:'you@pmg.com' }), 900);
+    setError('');
+    signInDev(profile || { id: 'me', name: 'You', email: 'you@pmg.com' }, defaultRole)
+      .then(user => onSignIn && onSignIn(user))
+      .catch(e => {
+        setStep('picker');
+        setError(e?.message || (lang === 'fr' ? 'Connexion impossible' : 'Sign-in failed'));
+      });
   };
 
   return (
@@ -102,6 +124,13 @@ function Login({ onSignIn }) {
             <span>{t('login.tenantRestricted')}</span>
           </div>
 
+          {error && (
+            <div style={{
+              background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:8,
+              padding:'10px 12px', fontSize:12, color:'#991B1B',
+            }}>{error}</div>
+          )}
+
           <div style={{display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--fg-muted)'}}>
             <a style={{color:'var(--accent-700)', cursor:'pointer'}}>{t('login.trouble')}</a>
             <span>v2.1.0</span>
@@ -133,8 +162,8 @@ function Login({ onSignIn }) {
                   <h3 style={{margin:0, fontSize:22, fontWeight:600, color:'#1A1A1A', letterSpacing:'-0.01em'}}>{t('login.pickAccount')}</h3>
                 </div>
                 <div style={{display:'flex', flexDirection:'column', gap:0, marginTop:-4}}>
-                  <AccountRow email="you@pmg.com" tenant="PMG · Pharmacy Group" onClick={pick}/>
-                  <AccountRow email={t('login.useAnother')} tenant="" isOther onClick={pick}/>
+                  <AccountRow email="you@pmg.com" tenant="PMG · Pharmacy Group" onClick={() => pick({ id:'me', name:'You', email:'you@pmg.com' })}/>
+                  <AccountRow email={t('login.useAnother')} tenant="" isOther onClick={() => pick({ id:'me', name:'You', email:'you@pmg.com' })}/>
                 </div>
               </>
             )}

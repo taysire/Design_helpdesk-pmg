@@ -99,7 +99,9 @@ function apiTicketToUi(api) {
 
 async function apiRequest(path, options = {}) {
   const base = getApiBase();
-  const res = await fetch(`${base}${path}`, options);
+  const authHeaders = typeof getAuthHeaders === 'function' ? getAuthHeaders() : {};
+  const headers = { ...authHeaders, ...(options.headers || {}) };
+  const res = await fetch(`${base}${path}`, { ...options, headers });
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
     throw new Error(`${options.method || 'GET'} ${path} failed (${res.status}) ${detail}`);

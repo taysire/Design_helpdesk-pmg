@@ -24,18 +24,21 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
+<script src="https://unpkg.com/@azure/msal-browser@3.27.0/lib/msal-browser.min.js" crossorigin="anonymous"></script>
+
 <script type="text/babel" src="data.jsx?v=14"></script>
 <script type="text/babel" src="i18n.jsx?v=20"></script>
 <script type="text/babel" src="ticket-lifecycle.jsx?v=10"></script>
 <script type="text/babel" src="notifications-client.jsx?v=1"></script>
-<script type="text/babel" src="api-client.jsx?v=4"></script>
+<script type="text/babel" src="api-client.jsx?v=5"></script>
+<script type="text/babel" src="auth-client.jsx?v=1"></script>
 <script type="text/babel" src="portal-client.jsx?v=1"></script>
 <script type="text/babel" src="kb-client.jsx?v=1"></script>
 <script type="text/babel" src="analytics-client.jsx?v=1"></script>
 <script type="text/babel" src="helpdesk-analytics.jsx?v=3"></script>
 <script type="text/babel" src="components.jsx?v=11"></script>
 <script type="text/babel" src="tweaks-panel.jsx"></script>
-<script type="text/babel" src="Login.jsx"></script>
+<script type="text/babel" src="Login.jsx?v=2"></script>
 <script type="text/babel" src="Sidebar.jsx?v=4"></script>
 <script type="text/babel" src="Topbar.jsx?v=11"></script>
 <script type="text/babel" src="Home.jsx?v=20"></script>
@@ -71,16 +74,52 @@ function App() {
 function AppShell() {
   const { t, lang, setLang } = useI18n();
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const role = tweaks.role;
-  const [signedIn, setSignedIn] = React.useState(false);
+  const tweakRole = tweaks.role;
+  const [user, setUser] = React.useState(null);
+  const [authConfig, setAuthConfig] = React.useState(null);
+  const [authLoading, setAuthLoading] = React.useState(true);
   const [apiOnline, setApiOnline] = React.useState(false);
   const [apiLoading, setApiLoading] = React.useState(true);
 
+  const entraMode = authConfig?.mode === 'entra' && authConfig?.entra_configured;
+  const role = user ? uiRoleFromApi(user.role) : tweakRole;
+
+  const handleSignOut = React.useCallback(() => {
+    clearAuthSession();
+    setUser(null);
+  }, []);
+
   React.useEffect(() => {
-    const handler = () => setSignedIn(false);
+    const handler = () => handleSignOut();
     window.addEventListener('pmg-signout', handler);
     return () => window.removeEventListener('pmg-signout', handler);
+  }, [handleSignOut]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const config = await fetchAuthConfig();
+        if (!cancelled) setAuthConfig(config);
+        const me = await bootstrapAuth(tweakRole);
+        if (!cancelled && me) setUser(me);
+      } catch (e) { /* offline */ }
+      if (!cancelled) setAuthLoading(false);
+    })();
+    return () => { cancelled = true; };
   }, []);
+
+  React.useEffect(() => {
+    if (!user || entraMode) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const me = await setDevAuthRole(tweakRole);
+        if (!cancelled) setUser(me);
+      } catch (e) { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [tweakRole, entraMode, user?.id]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -110,9 +149,16 @@ function AppShell() {
 
   return (
     <>
-      {signedIn
-        ? <SignedInApp role={role} apiOnline={apiOnline} onRoleChange={v => setTweak('role', v)} onSignOut={() => setSignedIn(false)}/>
-        : <Login onSignIn={() => setSignedIn(true)}/>}
+      {authLoading
+        ? <div style={{minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--fg-muted)'}}>
+            {lang === 'fr' ? 'Chargement…' : 'Loading…'}
+          </div>
+        : user
+          ? <SignedInApp user={user} role={role} apiOnline={apiOnline} authConfig={authConfig}
+              onRoleChange={entraMode ? null : (v => setTweak('role', v))}
+              onSignOut={handleSignOut}/>
+          : <Login authConfig={authConfig} defaultRole={tweakRole}
+              onSignIn={u => setUser(u || window.PMG_AUTH?.user)}/>}
 
       <TweaksPanel title={lang === 'fr' ? 'Réglages' : 'Tweaks'}>
         <TweakRadio
@@ -126,8 +172,8 @@ function AppShell() {
         />
         <TweakRadio
           label={t('tweaks.audience')}
-          value={role}
-          onChange={v => setTweak('role', v)}
+          value={entraMode ? role : tweakRole}
+          onChange={v => !entraMode && setTweak('role', v)}
           options={[
             { value:'enduser', label: t('tweaks.endUser') },
             { value:'it',      label: t('tweaks.itTeam') },
@@ -136,6 +182,14 @@ function AppShell() {
         <div className="twk-section-sub">
           {role === 'enduser' ? t('tweaks.endHint') : t('tweaks.itHint')}
         </div>
+        {user && (
+          <div className="twk-section-sub" style={{marginTop:8, fontSize:12}}>
+            {lang === 'fr' ? 'Connecté' : 'Signed in'} :{' '}
+            <span style={{color:'var(--fg)'}}>{user.name}</span>
+            {' · '}
+            <span style={{color:'var(--fg-secondary)'}}>{authConfig?.mode || 'dev'}</span>
+          </div>
+        )}
         <div className="twk-section-sub" style={{marginTop:8, fontSize:12}}>
           API :{' '}
           {apiLoading
@@ -149,7 +203,7 @@ function AppShell() {
   );
 }
 
-function SignedInApp({ role, apiOnline, onRoleChange, onSignOut }) {
+function SignedInApp({ user, role, apiOnline, authConfig, onRoleChange, onSignOut }) {
   const { t, lang } = useI18n();
   const [tickets, setTickets] = React.useState(window.PMG_DATA.TICKETS);
   const [view, setView] = React.useState('home');       // home | mine | inbox | wait | cat:<id> | new | detail

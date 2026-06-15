@@ -4,11 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.api.deps.auth import get_current_user, require_it_user
 from app.data.portal_catalog import SERVICE_ID_PREFIX
 from app.db.session import get_db
 from app.models.ticket import Ticket
 from app.schemas.actions import TicketActionResponse
 from app.schemas.ticket import CommentCreate, TicketCreate, TicketRead, TicketUpdate
+from app.services.auth import AuthUser
 from app.services.lifecycle import (
     apply_comment,
     apply_reopen,
@@ -62,6 +64,7 @@ def list_tickets(
     assignee_id: str | None = Query(default=None),
     service_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
 ) -> list[Ticket]:
     stmt = select(Ticket).options(selectinload(Ticket.activities)).order_by(Ticket.created_at.desc())
 
@@ -91,12 +94,20 @@ def list_tickets(
 
 
 @router.get("/{ticket_id}", response_model=TicketRead)
-def get_ticket(ticket_id: str, db: Session = Depends(get_db)) -> Ticket:
+def get_ticket(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+) -> Ticket:
     return _get_ticket_or_404(ticket_id, db)
 
 
 @router.post("", response_model=TicketActionResponse, status_code=201)
-def create_ticket(payload: TicketCreate, db: Session = Depends(get_db)) -> dict:
+def create_ticket(
+    payload: TicketCreate,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
     ticket_id = payload.id or _next_ticket_id(payload.ticket_type, payload.service_id)
     if db.get(Ticket, ticket_id):
         raise HTTPException(status_code=409, detail="Ticket id already exists")
@@ -110,7 +121,7 @@ def create_ticket(payload: TicketCreate, db: Session = Depends(get_db)) -> dict:
         request_type=payload.request_type,
         priority=payload.priority,
         status=normalize_status(payload.status),
-        reporter_id=payload.reporter_id,
+        reporter_id=payload.reporter_id or user.id,
         assignee_id=payload.assignee_id,
         department=payload.department,
         body=payload.body,
@@ -118,7 +129,7 @@ def create_ticket(payload: TicketCreate, db: Session = Depends(get_db)) -> dict:
         jira_key=payload.jira_key,
         slack_channel=payload.slack_channel,
     )
-    record_opened(ticket, who_id=payload.reporter_id)
+    record_opened(ticket, who_id=user.id)
     db.add(ticket)
     db.flush()
     notifications = dispatch_ticket_created(db, ticket)
@@ -127,7 +138,12 @@ def create_ticket(payload: TicketCreate, db: Session = Depends(get_db)) -> dict:
 
 
 @router.patch("/{ticket_id}", response_model=TicketActionResponse)
-def update_ticket(ticket_id: str, payload: TicketUpdate, db: Session = Depends(get_db)) -> dict:
+def update_ticket(
+    ticket_id: str,
+    payload: TicketUpdate,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(require_it_user),
+) -> dict:
     ticket = _get_ticket_or_404(ticket_id, db)
     data = payload.model_dump(exclude_unset=True)
     reopen_note = data.pop("reopen_note", None)
@@ -137,10 +153,10 @@ def update_ticket(ticket_id: str, payload: TicketUpdate, db: Session = Depends(g
     if "status" in data:
         new_status = normalize_status(data.pop("status"))
         if new_status == "inprog" and old_status in ("resolved", "closed"):
-            apply_reopen(ticket, who_id="me", note=reopen_note)
+            apply_reopen(ticket, who_id=user.id, note=reopen_note)
             notifications.extend(dispatch_status_change(db, ticket, old_status, new_status))
         elif new_status != old_status:
-            apply_status_change(ticket, new_status, who_id="me")
+            apply_status_change(ticket, new_status, who_id=user.id)
             notifications.extend(dispatch_status_change(db, ticket, old_status, new_status))
 
     for field, value in data.items():
@@ -153,14 +169,20 @@ def update_ticket(ticket_id: str, payload: TicketUpdate, db: Session = Depends(g
 
 
 @router.post("/{ticket_id}/comments", response_model=TicketActionResponse, status_code=201)
-def add_comment(ticket_id: str, payload: CommentCreate, db: Session = Depends(get_db)) -> dict:
+def add_comment(
+    ticket_id: str,
+    payload: CommentCreate,
+    db: Session = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
     ticket = _get_ticket_or_404(ticket_id, db)
+    author_role = payload.author_role or ("it" if user.is_it else "enduser")
     apply_comment(
         ticket,
         text=payload.text.strip(),
-        who_id=payload.who_id,
-        author_role=payload.author_role,
+        who_id=payload.who_id or user.id,
+        author_role=author_role,
     )
-    notifications = dispatch_comment(db, ticket, payload.author_role, payload.text.strip())
+    notifications = dispatch_comment(db, ticket, author_role, payload.text.strip())
     db.commit()
     return _action_response(_get_ticket_or_404(ticket_id, db), notifications)
