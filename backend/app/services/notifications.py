@@ -10,7 +10,9 @@ import httpx
 
 from app.config import get_settings
 from app.models.notification import Notification
+from app.services.graph_mail import GraphMailClient, GraphMailError
 from app.services.lifecycle import normalize_status
+from app.services.notification_templates import build_ticket_email
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -48,6 +50,16 @@ EMAIL_SUBJECTS = {
     "ticket_reopened": "Ticket {id} — réouvert",
 }
 
+STATUS_HEADLINES = {
+    "status_in_progress": "Votre ticket est maintenant en cours de traitement.",
+    "status_need_info": "Des informations supplémentaires sont requises pour votre ticket.",
+    "status_resolved": "Votre ticket a été résolu.",
+    "status_closed": "Votre ticket a été fermé.",
+    "comment_it": "Un agent TI a ajouté un commentaire à votre ticket.",
+    "ticket_created": "Votre demande a bien été enregistrée.",
+    "ticket_reopened": "Votre ticket a été réouvert.",
+}
+
 
 def _reporter_email(reporter_id: str) -> str:
     if "@" in reporter_id:
@@ -80,24 +92,71 @@ def _record(
     return row
 
 
+def _build_email_bodies(
+    ticket: Ticket,
+    event: str,
+    *,
+    new_status: str | None = None,
+    comment: str | None = None,
+) -> tuple[str, str]:
+    settings = get_settings()
+    headline = STATUS_HEADLINES.get(event, "Mise à jour de votre ticket.")
+    return build_ticket_email(
+        ticket,
+        headline=headline,
+        new_status=new_status,
+        comment=comment,
+        portal_url=settings.helpdesk_portal_url,
+    )
+
+
 def _send_email(
     db: Session,
     ticket: Ticket,
     event: str,
     subject: str,
     body: str,
+    *,
+    new_status: str | None = None,
+    comment: str | None = None,
+    graph_client: GraphMailClient | None = None,
 ) -> Notification:
     settings = get_settings()
     recipient = _reporter_email(ticket.reporter_id)
     if not settings.notifications_enabled:
         return _record(db, ticket, "email", event, recipient, "skipped", subject, body, "disabled")
 
-    mode = settings.notify_email_mode
+    mode = settings.notify_email_mode.lower()
+    plain, html = _build_email_bodies(
+        ticket,
+        event,
+        new_status=new_status,
+        comment=comment,
+    )
+
     if mode == "log":
         logger.info("EMAIL [%s] -> %s | %s", event, recipient, subject)
-        return _record(db, ticket, "email", event, recipient, "sent", subject, body, "mode=log")
+        return _record(db, ticket, "email", event, recipient, "sent", subject, plain, "mode=log")
 
-    return _record(db, ticket, "email", event, recipient, "failed", subject, body, f"mode={mode} not implemented")
+    if mode == "graph":
+        client = graph_client or GraphMailClient(settings)
+        if not client.is_configured():
+            logger.warning("Graph email skipped — missing GRAPH_* configuration")
+            return _record(
+                db, ticket, "email", event, recipient, "failed",
+                subject, plain, "graph not configured",
+            )
+        try:
+            client.send_mail(to=recipient, subject=subject, html_body=html, text_body=plain)
+            return _record(db, ticket, "email", event, recipient, "sent", subject, plain, "mode=graph")
+        except GraphMailError as exc:
+            logger.warning("Graph email delivery failed for %s: %s", ticket.id, exc)
+            return _record(db, ticket, "email", event, recipient, "failed", subject, plain, str(exc))
+        except Exception as exc:
+            logger.warning("Unexpected email delivery error for %s: %s", ticket.id, exc)
+            return _record(db, ticket, "email", event, recipient, "failed", subject, plain, str(exc))
+
+    return _record(db, ticket, "email", event, recipient, "failed", subject, plain, f"mode={mode} not supported")
 
 
 def _send_slack(
@@ -157,7 +216,9 @@ def dispatch_ticket_created(db: Session, ticket: Ticket) -> list[Notification]:
     sent: list[Notification] = []
     subject = EMAIL_SUBJECTS["ticket_created"].format(id=ticket.id)
     body = f"Votre ticket {ticket.id} a été créé.\n\nTitre : {ticket.title}\nPriorité : {ticket.priority}"
-    sent.append(_send_email(db, ticket, "ticket_created", subject, body))
+    sent.append(_send_email(
+        db, ticket, "ticket_created", subject, body, new_status=ticket.status,
+    ))
 
     if ticket.priority in ("P1", "P2"):
         msg = f":rotating_light: *{ticket.priority}* · {ticket.id} · {ticket.title}"
@@ -174,6 +235,8 @@ def dispatch_status_change(
     ticket: Ticket,
     old_status: str,
     new_status: str,
+    *,
+    comment: str | None = None,
 ) -> list[Notification]:
     sent: list[Notification] = []
     old_s = normalize_status(old_status)
@@ -186,12 +249,18 @@ def dispatch_status_change(
             f"Bonjour,\n\nLe statut de votre ticket {ticket.id} a changé.\n"
             f"Nouveau statut : {new_s}\n\nTitre : {ticket.title}"
         )
-        sent.append(_send_email(db, ticket, event_key, subject, body))
+        sent.append(_send_email(
+            db, ticket, event_key, subject, body,
+            new_status=new_s, comment=comment,
+        ))
 
     if new_s == "inprog" and old_s in ("resolved", "closed"):
         subject = EMAIL_SUBJECTS["ticket_reopened"].format(id=ticket.id)
         body = f"Le ticket {ticket.id} a été réouvert.\n\nTitre : {ticket.title}"
-        sent.append(_send_email(db, ticket, "ticket_reopened", subject, body))
+        sent.append(_send_email(
+            db, ticket, "ticket_reopened", subject, body,
+            new_status=new_s, comment=comment,
+        ))
         msg = f":repeat: Ticket réouvert · {ticket.id} · {ticket.title}"
         sent.append(_send_slack(db, ticket, "ticket_reopened", msg))
 
@@ -212,7 +281,10 @@ def dispatch_comment(
     if author_role in ("it", "admin"):
         subject = EMAIL_SUBJECTS["comment_it"].format(id=ticket.id)
         body = f"Nouveau commentaire TI sur {ticket.id} :\n\n{text}"
-        sent.append(_send_email(db, ticket, "comment_it", subject, body))
+        sent.append(_send_email(
+            db, ticket, "comment_it", subject, body,
+            new_status=ticket.status, comment=text,
+        ))
     elif ticket.priority in ("P1", "P2"):
         msg = f":speech_balloon: Réponse employé · {ticket.id} · {text[:120]}"
         sent.append(_send_slack(db, ticket, "comment_enduser", msg))
@@ -221,10 +293,18 @@ def dispatch_comment(
 
 def get_notification_config() -> dict:
     settings = get_settings()
+    email_mode = settings.notify_email_mode
+    if email_mode == "graph" and not settings.graph_email_ready:
+        email_mode = "graph (misconfigured)"
     return {
         "enabled": settings.notifications_enabled,
         "channels": {
-            "email": {"mode": settings.notify_email_mode, "active": settings.notifications_enabled},
+            "email": {
+                "mode": email_mode,
+                "active": settings.notifications_enabled,
+                "graph_configured": settings.graph_email_ready,
+                "sender": settings.graph_sender_email or None,
+            },
             "slack": {
                 "active": settings.notifications_enabled and bool(settings.notify_slack_webhook_url),
                 "channel": settings.notify_slack_channel,

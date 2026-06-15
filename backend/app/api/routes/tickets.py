@@ -158,7 +158,9 @@ def update_ticket(
         new_status = normalize_status(data.pop("status"))
         if new_status == "inprog" and old_status in ("resolved", "closed"):
             apply_reopen(ticket, who_id=user.id, note=reopen_note)
-            notifications.extend(dispatch_status_change(db, ticket, old_status, new_status))
+            notifications.extend(
+                dispatch_status_change(db, ticket, old_status, new_status, comment=reopen_note)
+            )
         elif new_status != old_status:
             apply_status_change(ticket, new_status, who_id=user.id)
             notifications.extend(dispatch_status_change(db, ticket, old_status, new_status))

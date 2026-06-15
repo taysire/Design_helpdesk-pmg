@@ -3,7 +3,7 @@ $Root = $PSScriptRoot
 Set-Location $Root
 
 Write-Host ""
-Write-Host "PMG Helpdesk — Backend (Docker)"
+Write-Host "PMG Helpdesk - Backend (Docker)"
 Write-Host "API      : http://127.0.0.1:8001"
 Write-Host "Swagger  : http://127.0.0.1:8001/docs"
 Write-Host "Health   : http://127.0.0.1:8001/api/health"

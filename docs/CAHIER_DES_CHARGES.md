@@ -376,8 +376,21 @@ Le MVP est accepté lorsque :
 | Auth Entra ID | À faire |
 | API tickets complète (CRUD, lifecycle) | À faire |
 | Front branché sur API | À faire |
-| Intégrations (Jira, Slack, Graph) | À faire |
+| Intégrations (Jira, Slack, Graph) | Email Graph prêt (`NOTIFY_EMAIL_MODE=graph`) · Jira/Slack en log |
 | Déploiement Azure production | À faire |
+
+### Variables d'environnement — email Graph (Phase 8)
+
+| Variable | Description |
+|----------|-------------|
+| `NOTIFY_EMAIL_MODE` ou `NOTIFICATIONS_MODE` | `log` (dev) ou `graph` (Microsoft Graph sendMail) |
+| `GRAPH_TENANT_ID` | Tenant Azure AD |
+| `GRAPH_CLIENT_ID` | ID application enregistrée |
+| `GRAPH_CLIENT_SECRET` | Secret client |
+| `GRAPH_SENDER_EMAIL` | Boîte expéditrice (UPN) |
+| `HELPDESK_PORTAL_URL` | URL du portail (lien dans les courriels) |
+
+Permission requise : **Mail.Send** (application) avec consentement administrateur.
 
 ---
 
