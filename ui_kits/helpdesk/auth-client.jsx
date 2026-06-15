@@ -15,7 +15,9 @@ function uiRoleFromApi(role) {
 }
 
 function apiRoleFromUi(role) {
-  return role === 'enduser' ? 'enduser' : 'it';
+  if (role === 'enduser') return 'enduser';
+  if (role === 'admin') return 'admin';
+  return 'it';
 }
 
 function persistAuthSession() {
@@ -152,6 +154,7 @@ async function setDevAuthRole(uiRole) {
     if (window.PMG_AUTH.user) {
       window.PMG_AUTH.user.role = apiRoleFromUi(uiRole);
       window.PMG_AUTH.user.is_it = uiRole !== 'enduser';
+      window.PMG_AUTH.user.is_admin = uiRole === 'admin';
     }
     window.dispatchEvent(new Event('pmg-auth-updated'));
     return window.PMG_AUTH.user;

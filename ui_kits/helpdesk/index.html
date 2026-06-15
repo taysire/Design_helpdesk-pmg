@@ -30,19 +30,20 @@
 <script src="https://unpkg.com/@azure/msal-browser@3.27.0/lib/msal-browser.min.js" crossorigin="anonymous"></script>
 
 <script type="text/babel" src="data.jsx?v=14"></script>
-<script type="text/babel" src="i18n.jsx?v=20"></script>
+<script type="text/babel" src="i18n.jsx?v=21"></script>
 <script type="text/babel" src="ticket-lifecycle.jsx?v=10"></script>
 <script type="text/babel" src="notifications-client.jsx?v=1"></script>
 <script type="text/babel" src="api-client.jsx?v=5"></script>
-<script type="text/babel" src="auth-client.jsx?v=1"></script>
+<script type="text/babel" src="auth-client.jsx?v=2"></script>
 <script type="text/babel" src="portal-client.jsx?v=1"></script>
+<script type="text/babel" src="admin-client.jsx?v=1"></script>
 <script type="text/babel" src="kb-client.jsx?v=1"></script>
 <script type="text/babel" src="analytics-client.jsx?v=1"></script>
 <script type="text/babel" src="helpdesk-analytics.jsx?v=3"></script>
 <script type="text/babel" src="components.jsx?v=11"></script>
 <script type="text/babel" src="tweaks-panel.jsx"></script>
 <script type="text/babel" src="Login.jsx?v=2"></script>
-<script type="text/babel" src="Sidebar.jsx?v=4"></script>
+<script type="text/babel" src="Sidebar.jsx?v=5"></script>
 <script type="text/babel" src="Topbar.jsx?v=11"></script>
 <script type="text/babel" src="Home.jsx?v=24"></script>
 <script type="text/babel" src="ReportsDashboard.jsx?v=3"></script>
@@ -59,6 +60,7 @@
 <script type="text/babel" src="ITEquipmentRequestForm.jsx?v=7"></script>
 <script type="text/babel" src="DynamicReportForm.jsx?v=16"></script>
 <script type="text/babel" src="NewTicket.jsx?v=2"></script>
+<script type="text/babel" src="AdminPortalCatalog.jsx?v=1"></script>
 <script type="text/babel" src="ServiceView.jsx?v=4"></script>
 
 <script type="text/babel">
@@ -180,10 +182,13 @@ function AppShell() {
           options={[
             { value:'enduser', label: t('tweaks.endUser') },
             { value:'it',      label: t('tweaks.itTeam') },
+            { value:'admin',   label: t('tweaks.admin') },
           ]}
         />
         <div className="twk-section-sub">
-          {role === 'enduser' ? t('tweaks.endHint') : t('tweaks.itHint')}
+          {tweakRole === 'enduser' ? t('tweaks.endHint')
+            : tweakRole === 'admin' ? t('tweaks.adminHint')
+            : t('tweaks.itHint')}
         </div>
         {user && (
           <div className="twk-section-sub" style={{marginTop:8, fontSize:12}}>
@@ -217,6 +222,7 @@ function SignedInApp({ user, role, apiOnline, authConfig, onRoleChange, onSignOu
     try { return localStorage.getItem('pmg-compact-table') === '1'; } catch (e) { return false; }
   });
   const isIt = role === 'it';
+  const isAdmin = !!user?.is_admin;
 
   const showToast = (kind, title, body) => {
     const id = Math.random().toString(36).slice(2,8);
@@ -262,7 +268,10 @@ function SignedInApp({ user, role, apiOnline, authConfig, onRoleChange, onSignOu
     if (role === 'enduser' && (view === 'inbox' || view === 'wait' || view === 'reports' || view.startsWith('cat:'))) {
       setView('home'); setOpenId(null);
     }
-  }, [role]);
+    if (!isAdmin && view.startsWith('admin:')) {
+      setView('home'); setOpenId(null);
+    }
+  }, [role, isAdmin, view]);
 
   const navigate = React.useCallback((nextView) => {
     setView(nextView);
@@ -431,6 +440,7 @@ function SignedInApp({ user, role, apiOnline, authConfig, onRoleChange, onSignOu
   let title = t('titles.home'), breadcrumb = null;
   if (view === 'mine') title = t('titles.myTickets');
   else if (view === 'reports') title = t('titles.reports');
+  else if (view === 'admin:portal') title = t('titles.adminPortal');
   else if (view === 'inbox') title = t('titles.allTickets');
   else if (view === 'wait') title = t('titles.waitingOnMe');
   else if (view === 'new' || view.startsWith('new:')) {
@@ -454,6 +464,7 @@ function SignedInApp({ user, role, apiOnline, authConfig, onRoleChange, onSignOu
     <>
       <Sidebar
         role={role}
+        isAdmin={isAdmin}
         currentView={view}
         setCurrentView={(v) => { setView(v); setOpenId(null); }}
         ticketCounts={counts}
@@ -470,6 +481,13 @@ function SignedInApp({ user, role, apiOnline, authConfig, onRoleChange, onSignOu
               apiOnline={apiOnline}
               onOpenTicket={openTicket}
               onSendWeeklyReport={() => showToast('success', t('toast.weeklyReportTitle'), t('toast.weeklyReportBody'))}
+            />
+          )}
+          {view === 'admin:portal' && isAdmin && (
+            <AdminPortalCatalog
+              apiOnline={apiOnline}
+              onCatalogChanged={syncPortalCatalog}
+              showToast={showToast}
             />
           )}
           {view === 'home' && (

@@ -1,6 +1,6 @@
 // Sidebar — left navigation with categories + counts
 
-function Sidebar({ currentView, setCurrentView, ticketCounts, onNew, role='it' }) {
+function Sidebar({ currentView, setCurrentView, ticketCounts, onNew, role='it', isAdmin=false }) {
   const { t, lang } = useI18n();
   const isEnd = role === 'enduser';
   const navItems = isEnd ? [
@@ -10,6 +10,7 @@ function Sidebar({ currentView, setCurrentView, ticketCounts, onNew, role='it' }
   ] : [
     { id:'home', icon:'home', labelKey:'nav.home' },
     { id:'reports', icon:'clipboard', labelKey:'nav.reports' },
+    ...(isAdmin ? [{ id:'admin:portal', icon:'settings', labelKey:'nav.adminPortal' }] : []),
     { id:'mine', icon:'list', labelKey:'nav.myTickets', count: ticketCounts.mine },
     { id:'inbox', icon:'inbox', labelKey:'nav.allTickets', count: ticketCounts.all },
     { id:'wait', icon:'clock', labelKey:'nav.waitingOnMe', count: ticketCounts.waiting },
