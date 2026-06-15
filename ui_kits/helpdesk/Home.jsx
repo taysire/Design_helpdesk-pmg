@@ -99,12 +99,12 @@ function Home({ tickets, openTicket, setCurrentView, role='it', searchQuery='', 
     else setCurrentView('cat:' + (item?.ticketCategory || portalId));
   };
 
-  const openService = React.useCallback((serviceId) => {
+  const openService = (serviceId) => {
     if (!serviceId || !setCurrentView) return;
     dismissHeroSearch();
     onSearchChange && onSearchChange('');
     setCurrentView('service:' + serviceId);
-  }, [setCurrentView, onSearchChange]);
+  };
 
   const scrollToPortal = (tab) => {
     setPortalTab(tab);
@@ -272,7 +272,7 @@ function Home({ tickets, openTicket, setCurrentView, role='it', searchQuery='', 
                       description={s.description || s.short}
                       actionLabel={t('home.requestService')}
                       accent="#1660CF"
-                      onActivate={() => openService(s.id)}
+                      onClick={() => openService(s.id)}
                     />
                   ))}
                 </div>
@@ -483,26 +483,24 @@ const HomeHeroSearch = React.forwardRef(function HomeHeroSearch({
 
   const close = React.useCallback(() => {
     setFocused(false);
-    inputRef.current?.blur();
   }, []);
 
   React.useImperativeHandle(ref, () => ({ close }), [close]);
 
   React.useEffect(() => {
-    const onDocClick = (e) => {
-      if (!focused) return;
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) close();
+    if (!focused) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') close();
     };
     const onScroll = (e) => {
-      if (!focused) return;
       const el = e.target;
       if (wrapRef.current && (wrapRef.current === el || wrapRef.current.contains(el))) return;
       close();
     };
-    document.addEventListener('click', onDocClick);
+    document.addEventListener('keydown', onKey);
     window.addEventListener('scroll', onScroll, true);
     return () => {
-      document.removeEventListener('click', onDocClick);
+      document.removeEventListener('keydown', onKey);
       window.removeEventListener('scroll', onScroll, true);
     };
   }, [close, focused]);
@@ -980,22 +978,21 @@ function PortalCatalogCard({ icon, title, description, actionLabel, badge, accen
   const accentColor = accent || 'var(--accent-600)';
   const activate = onActivate || onClick;
 
-  const handleActivate = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    activate && activate();
-  };
-
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={activate ? 0 : -1}
       data-service-id={dataServiceId || undefined}
-      onMouseDown={handleActivate}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleActivate(e); } }}
+      onClick={activate || undefined}
+      onKeyDown={activate ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          activate(e);
+        }
+      } : undefined}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        fontFamily: 'inherit',
         textAlign: 'left',
         width: '100%',
         background: 'white',
@@ -1003,7 +1000,7 @@ function PortalCatalogCard({ icon, title, description, actionLabel, badge, accen
         borderLeft: '3px solid ' + accentColor,
         borderRadius: 10,
         padding: '16px 18px',
-        cursor: 'pointer',
+        cursor: activate ? 'pointer' : 'default',
         display: 'flex',
         flexDirection: 'column',
         gap: 12,
@@ -1041,7 +1038,7 @@ function PortalCatalogCard({ icon, title, description, actionLabel, badge, accen
         {actionLabel}
         <Icon name="chevron-right" size={14} color={accentColor}/>
       </span>
-    </button>
+    </div>
   );
 }
 

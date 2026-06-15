@@ -222,36 +222,39 @@ function DynamicReportForm({ onCancel, onSubmit, onViewTicket, portalCategory = 
 
 const FORM_PHASES = ['context', 'problem', 'details', 'review'];
 
-function FormProgressBar({ value, step, total, currentPhase, t }) {
+function FormProgressBar({ value, step, total, currentPhase, t: tProp }) {
+  const t = tProp || useI18n().t;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--fg-muted)' }}>
         <span>{t('dynamicForm.progress')}</span>
         <span>{step} / {total}</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {FORM_PHASES.map((phase, i) => {
-          const active = phase === currentPhase;
-          const done = FORM_PHASES.indexOf(currentPhase) > i;
-          return (
-            <React.Fragment key={phase}>
-              {i > 0 && (
+      {currentPhase && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {FORM_PHASES.map((phase, i) => {
+            const active = phase === currentPhase;
+            const done = FORM_PHASES.indexOf(currentPhase) > i;
+            return (
+              <React.Fragment key={phase}>
+                {i > 0 && (
+                  <span style={{
+                    flex: 1, height: 1, minWidth: 12, maxWidth: 32,
+                    background: done ? 'var(--accent-400)' : 'var(--ink-200)',
+                  }}/>
+                )}
                 <span style={{
-                  flex: 1, height: 1, minWidth: 12, maxWidth: 32,
-                  background: done ? 'var(--accent-400)' : 'var(--ink-200)',
-                }}/>
-              )}
-              <span style={{
-                fontSize: 10, fontWeight: active ? 600 : 500, letterSpacing: '0.04em',
-                textTransform: 'uppercase', whiteSpace: 'nowrap',
-                color: active ? 'var(--accent-700)' : (done ? 'var(--fg-secondary)' : 'var(--fg-muted)'),
-              }}>
-                {t(`dynamicForm.phase${phase.charAt(0).toUpperCase()}${phase.slice(1)}`)}
-              </span>
-            </React.Fragment>
-          );
-        })}
-      </div>
+                  fontSize: 10, fontWeight: active ? 600 : 500, letterSpacing: '0.04em',
+                  textTransform: 'uppercase', whiteSpace: 'nowrap',
+                  color: active ? 'var(--accent-700)' : (done ? 'var(--fg-secondary)' : 'var(--fg-muted)'),
+                }}>
+                  {t(`dynamicForm.phase${phase.charAt(0).toUpperCase()}${phase.slice(1)}`)}
+                </span>
+              </React.Fragment>
+            );
+          })}
+        </div>
+      )}
       <div style={{ height: 6, background: 'var(--ink-100)', borderRadius: 999, overflow: 'hidden' }}>
         <div style={{
           height: '100%', width: value + '%', background: 'var(--accent-600)',
@@ -262,7 +265,8 @@ function FormProgressBar({ value, step, total, currentPhase, t }) {
   );
 }
 
-function FormStepInput({ def, value, onChange, t }) {
+function FormStepInput({ def, value, onChange, t: tProp }) {
+  const t = tProp || useI18n().t;
   if (def.type === 'choice') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -309,7 +313,8 @@ function FormStepInput({ def, value, onChange, t }) {
   );
 }
 
-function FileStepInput({ def, value, onChange, t }) {
+function FileStepInput({ def, value, onChange, t: tProp }) {
+  const t = tProp || useI18n().t;
   const inputRef = React.useRef(null);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
