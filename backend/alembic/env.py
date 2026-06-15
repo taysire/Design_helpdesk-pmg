@@ -5,7 +5,14 @@ from sqlalchemy import engine_from_config, pool
 
 from app.config import get_settings
 from app.db.base import Base
-from app.models import Notification, Ticket, TicketActivity  # noqa: F401 — register models
+from app.models import (  # noqa: F401 — register models
+    Notification,
+    PortalIncidentGroup,
+    PortalIncidentItem,
+    ServiceCatalogItem,
+    Ticket,
+    TicketActivity,
+)
 
 config = context.config
 if config.config_file_name is not None:

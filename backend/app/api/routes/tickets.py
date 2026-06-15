@@ -11,6 +11,7 @@ from app.models.ticket import Ticket
 from app.schemas.actions import TicketActionResponse
 from app.schemas.ticket import CommentCreate, TicketCreate, TicketRead, TicketUpdate
 from app.services.auth import AuthUser
+from app.services.portal_store import get_service_id_prefix
 from app.services.lifecycle import (
     apply_comment,
     apply_reopen,
@@ -27,9 +28,12 @@ from app.services.notifications import (
 router = APIRouter(prefix="/api/tickets", tags=["tickets"])
 
 
-def _next_ticket_id(ticket_type: str, service_id: str | None = None) -> str:
+def _next_ticket_id(ticket_type: str, service_id: str | None = None, db: Session | None = None) -> str:
     if ticket_type == "service":
-        prefix = SERVICE_ID_PREFIX.get(service_id or "", "REQ")
+        if db is not None:
+            prefix = get_service_id_prefix(db, service_id)
+        else:
+            prefix = SERVICE_ID_PREFIX.get(service_id or "", "REQ")
     else:
         prefix = "INC"
     suffix = uuid.uuid4().hex[:4].upper()
@@ -108,7 +112,7 @@ def create_ticket(
     db: Session = Depends(get_db),
     user: AuthUser = Depends(get_current_user),
 ) -> dict:
-    ticket_id = payload.id or _next_ticket_id(payload.ticket_type, payload.service_id)
+    ticket_id = payload.id or _next_ticket_id(payload.ticket_type, payload.service_id, db)
     if db.get(Ticket, ticket_id):
         raise HTTPException(status_code=409, detail="Ticket id already exists")
 

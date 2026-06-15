@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import analytics_router, auth_router, health_router, kb_router, notifications_router, portal_router, tickets_router
+from app.api.routes import admin_router, analytics_router, auth_router, health_router, kb_router, notifications_router, portal_router, tickets_router
 from app.config import get_settings
 
 settings = get_settings()
@@ -29,3 +29,4 @@ app.include_router(tickets_router)
 app.include_router(analytics_router)
 app.include_router(notifications_router)
 app.include_router(kb_router)
+app.include_router(admin_router)

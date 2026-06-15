@@ -46,3 +46,11 @@ def require_it_user(user: AuthUser = Depends(get_current_user)) -> AuthUser:
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     return user
+
+
+def require_admin_user(user: AuthUser = Depends(get_current_user)) -> AuthUser:
+    try:
+        require_roles(user, "admin")
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return user
