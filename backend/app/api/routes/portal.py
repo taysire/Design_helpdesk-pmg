@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from app.data.portal_catalog import (
     PORTAL_INCIDENT_GROUPS,
@@ -6,12 +6,14 @@ from app.data.portal_catalog import (
     SERVICE_CATALOG,
     get_form_schema as resolve_form_schema,
 )
+from app.schemas.kb import AnnouncementRead, ServiceStatusRead
 from app.schemas.portal import (
     FormSchemaRead,
     PortalIncidentGroup,
     PortalIncidentItem,
     PortalServiceItem,
 )
+from app.services.kb import list_announcements, list_service_status
 
 router = APIRouter(prefix="/api/portal", tags=["portal"])
 
@@ -29,6 +31,20 @@ def list_portal_incident_groups() -> list[PortalIncidentGroup]:
 @router.get("/services", response_model=list[PortalServiceItem])
 def list_portal_services() -> list[PortalServiceItem]:
     return [PortalServiceItem.model_validate(item) for item in SERVICE_CATALOG]
+
+
+@router.get("/announcements", response_model=list[AnnouncementRead])
+def list_portal_announcements(
+    lang: str = Query(default="fr", pattern="^(fr|en)$"),
+) -> list[dict]:
+    return list_announcements(lang=lang)
+
+
+@router.get("/service-status", response_model=list[ServiceStatusRead])
+def list_service_status_endpoint(
+    lang: str = Query(default="fr", pattern="^(fr|en)$"),
+) -> list[dict]:
+    return list_service_status(lang=lang)
 
 
 @router.get("/forms/{portal_id}", response_model=FormSchemaRead)

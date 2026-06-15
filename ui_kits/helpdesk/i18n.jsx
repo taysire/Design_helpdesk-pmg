@@ -110,6 +110,13 @@ const STRINGS = {
       articleModalReport: 'Report related issue',
       articleModalClose: 'Close',
       serviceNotFound: 'This service request is not available.',
+      announcements: 'Announcements',
+      serviceStatus: 'Service status',
+      serviceStatusAllOk: 'All systems operational',
+      statusOperational: 'Operational',
+      statusDegraded: 'Degraded',
+      statusOutage: 'Outage',
+      statusMaintenance: 'Maintenance',
     },
     helpArticles: {
       'printer-offline': {
@@ -986,6 +993,13 @@ const STRINGS = {
       articleModalReport: 'Signaler un incident lié',
       articleModalClose: 'Fermer',
       serviceNotFound: 'Cette demande de service n\'est pas disponible.',
+      announcements: 'Annonces',
+      serviceStatus: 'État des services',
+      serviceStatusAllOk: 'Tous les systèmes opérationnels',
+      statusOperational: 'Opérationnel',
+      statusDegraded: 'Dégradé',
+      statusOutage: 'Panne',
+      statusMaintenance: 'Maintenance',
     },
     helpArticles: {
       'printer-offline': {
@@ -1832,6 +1846,8 @@ function getLocalizedPortalIncident(portalId, lang) {
 }
 
 function getLocalizedHelpArticle(articleId, lang) {
+  const fromApi = window.PMG_KB?.articles?.find(x => x.id === articleId);
+  if (fromApi) return fromApi;
   const a = STRINGS[lang]?.helpArticles?.[articleId] || STRINGS.en?.helpArticles?.[articleId];
   const base = window.PMG_DATA?.HELP_ARTICLES?.find(x => x.id === articleId);
   return {
@@ -1851,6 +1867,13 @@ function helpArticleMatchesSearch(articleId, query, lang) {
   const q = (query || '').trim().toLowerCase();
   if (!q) return true;
   const art = getLocalizedHelpArticle(articleId, lang);
+  const haystack = [art.title, art.excerpt, art.body, art.keywords, art.id].filter(Boolean).join(' ').toLowerCase();
+  return haystack.includes(q);
+}
+
+function helpArticleMatchesSearchObj(art, query) {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return true;
   const haystack = [art.title, art.excerpt, art.body, art.keywords, art.id].filter(Boolean).join(' ').toLowerCase();
   return haystack.includes(q);
 }
@@ -1906,6 +1929,6 @@ function LangSwitch({ style }) {
 
 Object.assign(window, {
   I18nProvider, useI18n, STRINGS, getNested, getLocalizedCategory, getLocalizedPortalIncident,
-  getLocalizedHelpArticle, helpArticleMatchesSearch, getLocalizedService,
+  getLocalizedHelpArticle, helpArticleMatchesSearch, helpArticleMatchesSearchObj, getLocalizedService,
   getStatusLabel, getPriorityLabel, LangSwitch,
 });

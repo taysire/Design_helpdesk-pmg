@@ -19,6 +19,13 @@ function Home({ tickets, openTicket, setCurrentView, role='it', searchQuery='', 
   const heroSearchRef = React.useRef(null);
   const [portalTab, setPortalTab] = React.useState('incidents');
   const [openArticleId, setOpenArticleId] = React.useState(null);
+  const [kbRev, setKbRev] = React.useState(0);
+
+  React.useEffect(() => {
+    const handler = () => setKbRev(v => v + 1);
+    window.addEventListener('pmg-kb-updated', handler);
+    return () => window.removeEventListener('pmg-kb-updated', handler);
+  }, []);
 
   const dismissHeroSearch = () => heroSearchRef.current?.close();
 
@@ -137,7 +144,12 @@ function Home({ tickets, openTicket, setCurrentView, role='it', searchQuery='', 
   );
 
   const portalItems = Object.values(incidentById);
-  const helpArticles = (window.PMG_DATA.HELP_ARTICLES || []).map(a => getLocalizedHelpArticle(a.id, lang));
+  const kb = window.PMG_KB;
+  void kbRev;
+  const helpSource = kb?.articles?.length ? kb.articles : (window.PMG_DATA.HELP_ARTICLES || []);
+  const helpArticles = helpSource.map(a => getLocalizedHelpArticle(a.id, lang));
+  const announcements = kb?.announcements || [];
+  const serviceStatus = kb?.serviceStatus || [];
   const ticketPool = isEnd ? mine : tickets;
 
   return (
@@ -162,6 +174,14 @@ function Home({ tickets, openTicket, setCurrentView, role='it', searchQuery='', 
         onReports={() => setCurrentView('reports')}
         heroSearchRef={heroSearchRef}
       />
+
+      {announcements.length > 0 && (
+        <HomeAnnouncementsBanner items={announcements}/>
+      )}
+
+      {serviceStatus.length > 0 && (
+        <HomeServiceStatusBar items={serviceStatus}/>
+      )}
 
       {openArticleId && (
         <HelpArticleModal
@@ -279,6 +299,73 @@ function Home({ tickets, openTicket, setCurrentView, role='it', searchQuery='', 
         )}
       </div>
     </div>
+  );
+}
+
+function HomeAnnouncementsBanner({ items }) {
+  const { t } = useI18n();
+  const [dismissed, setDismissed] = React.useState(() => new Set());
+  const visible = items.filter(a => !dismissed.has(a.id));
+  if (!visible.length) return null;
+
+  return (
+    <section className="hd-home-announcements" aria-label={t('home.announcements')}>
+      {visible.map(item => (
+        <div key={item.id} className={'hd-home-announcement hd-home-announcement--' + (item.severity || 'info')}>
+          <div className="hd-home-announcement-icon">
+            <Icon name={item.severity === 'warning' ? 'alert-triangle' : 'info'} size={16}/>
+          </div>
+          <div className="hd-home-announcement-body">
+            <strong>{item.title}</strong>
+            <span>{item.body}</span>
+          </div>
+          <button
+            type="button"
+            className="hd-home-announcement-dismiss"
+            aria-label={t('home.articleModalClose')}
+            onClick={() => setDismissed(prev => new Set([...prev, item.id]))}
+          >
+            <Icon name="x" size={14}/>
+          </button>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+const SERVICE_STATUS_TONE = {
+  operational: 'ok',
+  degraded: 'warn',
+  outage: 'error',
+  maintenance: 'info',
+};
+
+function HomeServiceStatusBar({ items }) {
+  const { t } = useI18n();
+  const allOk = items.every(s => s.status === 'operational');
+
+  return (
+    <section className="hd-home-service-status" aria-label={t('home.serviceStatus')}>
+      <div className="hd-home-service-status-head">
+        <Icon name="activity" size={15} color="var(--fg-muted)"/>
+        <span>{t('home.serviceStatus')}</span>
+        {allOk && <span className="hd-home-service-status-ok">{t('home.serviceStatusAllOk')}</span>}
+      </div>
+      <div className="hd-home-service-status-grid">
+        {items.map(item => (
+          <div
+            key={item.id}
+            className={'hd-home-service-status-item hd-home-service-status-item--' + (SERVICE_STATUS_TONE[item.status] || 'info')}
+            title={item.message}
+          >
+            <Icon name={item.icon || 'circle'} size={14}/>
+            <span className="hd-home-service-status-label">{item.label}</span>
+            <span className="hd-home-service-status-dot" aria-hidden="true"/>
+            <span className="hd-home-service-status-msg">{item.message}</span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -1080,4 +1167,5 @@ Object.assign(window, {
   Home, Stat, TicketRow, ActivityRow, EmptyState, SectionHeader, CategoryListRow,
   PortalCatalogCard, PortalCatalogSection, PortalCatalogGroup, ReportsHomeBanner, ServiceCatalogCard,
   HomeHero, HomeHeroSearch, HelpArticleModal, HomeKpiCard, HomeQuickAccess, HomePanel,
+  HomeAnnouncementsBanner, HomeServiceStatusBar,
 });
