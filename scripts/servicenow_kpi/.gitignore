@@ -10,3 +10,17 @@ reports/
 exports/
 
 scripts/servicenow_kpi/reports/
+
+reports/
+scripts/servicenow_kpi/reports/
+
+scripts/servicenow_kpi/comparison_tables.py
+scripts/servicenow_kpi/discover_sharepoint.py
+scripts/servicenow_kpi/executive_summary.py
+scripts/servicenow_kpi/pull_servicenow.py
+scripts/servicenow_kpi/run_csv_report.py
+scripts/servicenow_kpi/run_test_current_week.py
+scripts/servicenow_kpi/setup_snow.ps1
+scripts/servicenow_kpi/test_sharepoint_connection.py
+scripts/servicenow_kpi/test_snow_connection.py
+scripts/servicenow_kpi/tests/
