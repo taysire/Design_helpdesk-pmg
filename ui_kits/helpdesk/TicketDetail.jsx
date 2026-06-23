@@ -78,8 +78,8 @@ function TicketDetail({
         <div style={{
           display:'flex', alignItems:'center', gap:8, marginBottom:4,
         }}>
-          <Avatar person={reporter} size={22}/>
-          <span style={{fontSize:13, fontWeight:500, color:'var(--fg)'}}>{reporter?.name}</span>
+            <Avatar person={reporter} size={22}/>
+            <span style={{fontSize:13, fontWeight:500, color:'var(--fg)'}}>{reporter?.name}</span>
           <span style={{fontSize:11, color:'var(--fg-muted)'}}>{t('ticket.reported')}</span>
         </div>
         <TicketReportBody ticket={ticket}/>
@@ -91,9 +91,9 @@ function TicketDetail({
         }}>
           <div style={{display:'flex', flexDirection:'column', gap:0, position:'relative', paddingLeft:2}}>
             <div style={{position:'absolute', left:11, top:14, bottom:72, width:1, background:'var(--ink-200)'}}/>
-            {activity.map((a, i) => (
+          {activity.map((a, i) => (
               <ActivityItem key={i} entry={a} isLast={i === activity.length - 1}/>
-            ))}
+          ))}
           {/* Composer */}
           <div style={{display:'flex', gap:12, marginTop:14, paddingLeft:0}}>
             <Avatar person={window.PMG_DATA.PEOPLE.find(p=>p.id==='me')} size={24}/>
@@ -108,7 +108,7 @@ function TicketDetail({
               </div>
             </div>
           </div>
-          </div>
+        </div>
         </div>
 
         {showReopen && (
@@ -285,7 +285,7 @@ function ActivityItem({ entry, isLast }) {
   return (
     <div style={{display:'flex', gap:12, padding:'10px 0', alignItems:'flex-start', position:'relative'}}>
       <div style={{position:'relative', zIndex:1, flexShrink:0}}>
-        <Avatar person={who} size={24}/>
+      <Avatar person={who} size={24}/>
       </div>
       <div style={{flex:1, display:'flex', flexDirection:'column', gap:4, minWidth:0}}>
         <div style={{fontSize:12, color:'var(--fg-secondary)', lineHeight:1.45}}>

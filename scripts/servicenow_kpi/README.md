@@ -1,107 +1,110 @@
 # ServiceNow Weekly KPI Reporting
 
-Génère un rapport HTML hebdomadaire avec KPIs, graphiques matplotlib et recommandations management.
+Génère un rapport HTML bi-hebdomadaire avec KPIs, graphiques et envoi email automatique.
 
-## Pipeline automatisé (production)
+## Pipeline automatisé (production — chaque lundi 9h)
 
 ```
-Microsoft Lists / SharePoint
-        ↓  Microsoft Graph API
-        ↓  Script KPI (run_weekly.py)
-        ↓  Email automatique (Graph sendMail)
+ServiceNow REST API (sys_created_on, pagination)
+        ↓
+Exclusion weekends (samedi/dimanche)
+        ↓
+Contrôle qualité (totaux journaliers lun-ven)
+        ↓
+Rapport KPI HTML (applications / équipements séparés)
+        ↓
+Email automatique (Microsoft Graph sendMail)
 ```
 
-### 1. Inscription Azure AD
-
-Créer une **App registration** dans le portail Azure :
-
-| Permission (Application) | Usage |
-|--------------------------|-------|
-| `Sites.Read.All` | Lire la liste SharePoint |
-| `Mail.Send` | Envoyer le rapport par email |
-
-Accorder le **consentement administrateur**, puis créer un **client secret**.
-
-### 2. Configuration
+### 1. Installation
 
 ```powershell
 cd scripts/servicenow_kpi
 pip install -r requirements.txt
 copy .env.example .env
-# Éditer .env avec tenant, client, site SharePoint, destinataires
+# Éditer .env : SNOW_*, MS_*, EMAIL
 ```
 
-### 3. Lancer le pipeline
+### 2. Lancer manuellement
 
 ```powershell
-python run_weekly.py
+# Production (API ServiceNow + email)
+python run_automated.py
+
+# Test sans email
+python run_automated.py --dry-run
+
+# Test local avec CSV
+python run_automated.py --source csv --csv Tickets_5.csv --from-date 2026-06-01 --to-date 2026-06-14 --dry-run
 ```
 
-Le script :
-1. Lit les tickets depuis la Microsoft List via Graph
-2. Calcule les KPIs et génère le HTML dans `reports/weekly/`
-3. Envoie l'email via `POST /users/{sender}/sendMail`
+### 3. Planification
 
-### 4. Planification (Task Scheduler)
+| Plateforme | Fichier |
+|------------|---------|
+| **Windows Task Scheduler** | `scheduling/run_monday.ps1` + `scheduling/WINDOWS_TASK_SCHEDULER.md` |
+| **Linux cron** | `scheduling/cron.example` |
+| **GitHub Actions** | `.github/workflows/weekly-kpi-report.yml` |
 
-- **Programme** : chaque lundi 08:00
-- **Action** : `python.exe` avec argument `run_weekly.py`
-- **Répertoire** : `scripts/servicenow_kpi`
-- **Variables** : charger via fichier `.env` (python-dotenv)
+**Windows (lundi 09:00)** :
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scheduling/run_monday.ps1
+```
+
+**Cron** :
+
+```cron
+0 9 * * 1 cd /chemin/servicenow_kpi && python3 run_automated.py >> logs/cron.log 2>&1
+```
+
+### 4. Période analysée (automatique)
+
+Chaque **lundi**, le script analyse les **2 semaines ISO complètes** se terminant le dimanche précédant la semaine courante. Les tickets créés **samedi et dimanche sont exclus** du rapport.
+
+Override via `.env` : `SNOW_PERIOD_START`, `SNOW_PERIOD_END`
+
+### 5. Logs
+
+- Console + fichier : `logs/weekly-kpi-YYYY-MM-DD.log`
+- Contenu : période, requête ServiceNow, total tickets, pages, tickets/jour
+
+### 6. Contrôle qualité
+
+Le rapport **n'est pas envoyé** si :
+- somme journalière ≠ total
+- pagination ServiceNow incomplète
+- écart avec `--expected-daily` JSON
 
 ---
 
-## Mode développement (CSV local)
+## Mode développement (CLI manuel)
 
 ```powershell
-python generate_report.py --csv Tickets.csv
-```
-
-Avec envoi email :
-
-```powershell
-python generate_report.py --csv Tickets.csv --email --email-to manager@example.com
-```
-
-## Options CLI
-
-| Option | Description |
-|--------|-------------|
-| `--source csv\|graph\|api` | Source de données |
-| `--csv` | Export CSV local |
-| `--output` | Dossier de sortie (`reports/weekly/`) |
-| `--date YYYY-MM-DD` | Semaine de référence |
-| `--email` | Envoyer le rapport après génération |
-| `--email-to` | Destinataires (virgules) |
-
-## Colonnes attendues (List / CSV)
-
-`Requérant`, `Catégorie de Ticket`, `Date du signalement`, `Titre`, `Description du problème`, `Priorité`, `Attribuée à`, `Statut`, `Commentaire`, `Source du problème`, `Created`, `Superviseur`
-
-La source Graph résout automatiquement les noms internes SharePoint via les **display names** des colonnes.
-
-## Architecture
-
-```
-run_weekly.py               # Pipeline automatisé (Graph → KPI → Email)
-generate_report.py          # CLI manuel (CSV / Graph / API)
-├── graph_client.py         # Auth MSAL + requêtes Graph
-├── data_sources/
-│   ├── base.py             # TicketDataSource (interface)
-│   ├── csv_source.py       # Export CSV
-│   ├── sharepoint_list.py  # Microsoft Lists via Graph
-│   └── servicenow_api.py   # Stub ServiceNow REST
-├── kpi_calculator.py
-├── charts.py
-├── recommendations.py
-├── report_builder.py
-└── email_sender.py         # Graph sendMail + SMTP fallback
+python generate_report.py --csv Tickets_5.csv --from-date 2026-06-01 --to-date 2026-06-14 --volume-only --email
 ```
 
 ## Variables d'environnement
 
-Voir `.env.example` pour la liste complète.
+Voir `.env.example` :
 
-**Graph (recommandé)** : `AZURE_*`, `GRAPH_SITE_*`, `GRAPH_LIST_NAME`, `GRAPH_SENDER_UPN`, `GRAPH_EMAIL_TO`
+| Variable | Description |
+|----------|-------------|
+| `SNOW_INSTANCE` | Instance ServiceNow |
+| `SNOW_USER` / `SNOW_PASSWORD` | Credentials API |
+| `SNOW_TABLE` | Table (défaut `incident`) |
+| `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET` | Azure Graph |
+| `GRAPH_SENDER_UPN`, `EMAIL` | Email automatique |
+| `EMAIL_SUBJECT` | Sujet (défaut : Rapport hebdomadaire KPI — PMG Helpdesk) |
 
-**SMTP (fallback)** : `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_TO`
+## Architecture
+
+```
+run_automated.py            # Pipeline vendredi (API → QA → rapport → email)
+generate_report.py          # CLI manuel
+period_utils.py             # Calcul période bi-hebdomadaire
+logging_setup.py            # Journaux fichier + console
+data_quality.py             # Validation avant envoi
+ticket_classifier.py        # Applications vs équipements
+data_sources/servicenow_api.py  # API + pagination sys_created_on
+```

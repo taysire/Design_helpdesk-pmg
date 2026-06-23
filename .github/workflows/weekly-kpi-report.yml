@@ -1,0 +1,79 @@
+name: Weekly ServiceNow KPI Report
+
+on:
+  schedule:
+    # Chaque lundi 13:00 UTC (09:00 America/Toronto heure standard)
+    - cron: "0 13 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Générer sans envoyer l'email"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      period_start:
+        description: "Override période début (YYYY-MM-DD)"
+        required: false
+        type: string
+      period_end:
+        description: "Override période fin (YYYY-MM-DD)"
+        required: false
+        type: string
+
+jobs:
+  kpi-report:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts/servicenow_kpi
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/servicenow_kpi/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run automated KPI pipeline
+        env:
+          SNOW_INSTANCE: ${{ secrets.SNOW_INSTANCE }}
+          SNOW_USER: ${{ secrets.SNOW_USER }}
+          SNOW_PASSWORD: ${{ secrets.SNOW_PASSWORD }}
+          SNOW_TABLE: ${{ vars.SNOW_TABLE || 'incident' }}
+          MS_TENANT_ID: ${{ secrets.MS_TENANT_ID }}
+          MS_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
+          MS_CLIENT_SECRET: ${{ secrets.MS_CLIENT_SECRET }}
+          GRAPH_SENDER_UPN: ${{ secrets.GRAPH_SENDER_UPN }}
+          EMAIL: ${{ secrets.GRAPH_EMAIL_TO }}
+          EMAIL_SUBJECT: Rapport hebdomadaire KPI — PMG Helpdesk
+          KPI_DATA_SOURCE: api
+        run: |
+          ARGS=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          if [ -n "${{ github.event.inputs.period_start }}" ]; then
+            ARGS="$ARGS --from-date ${{ github.event.inputs.period_start }}"
+          fi
+          if [ -n "${{ github.event.inputs.period_end }}" ]; then
+            ARGS="$ARGS --to-date ${{ github.event.inputs.period_end }}"
+          fi
+          python run_automated.py $ARGS
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-kpi-report
+          path: |
+            reports/weekly/latest.html
+            scripts/servicenow_kpi/logs/
+          if-no-files-found: warn

@@ -9,7 +9,9 @@ from pathlib import Path
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = PACKAGE_DIR.parent.parent
-DEFAULT_CSV = PACKAGE_DIR / "Tickets__KPI.csv"
+CACHE_DIR = PACKAGE_DIR / ".cache"
+DEFAULT_SNAPSHOT = CACHE_DIR / "servicenow_snapshot.csv"
+DEFAULT_CSV = DEFAULT_SNAPSHOT  # cache optionnel écrit par l'API (lecture = ServiceNow)
 REPORTS_DIR = PROJECT_ROOT / "reports" / "weekly"
 CHARTS_CACHE_DIR = PACKAGE_DIR / ".charts_cache"
 
@@ -68,7 +70,22 @@ PRIORITY_SHORT = {
     "Planifié": "Planifié",
 }
 
+PRIORITY_FROM_SHORT = {
+    "Critique": "Critique (dans la prochaine minute)",
+    "Élevé": "Élevé (dans l'heure)",
+    "Elevé": "Élevé (dans l'heure)",
+    "Moyen": "Moyen (dans la journée)",
+    "Faible": "Faible (dans la semaine)",
+    "Planifié": "Planifié",
+    "Planifie": "Planifié",
+}
+
 DATE_FORMATS = ("%d/%m/%Y %H:%M", "%d/%m/%Y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d")
+
+# SharePoint list « Tickets » — champs de référence (données réelles uniquement)
+UNIQUE_ID_FIELD = "ID"
+DATE_FIELD = "Created"
+SHAREPOINT_LIST_URL = "https://pmgqc.sharepoint.com/sites/ServiceNow/Lists/Tickets"
 
 # ── Report branding ───────────────────────────────────────────────────────────
 
@@ -96,11 +113,20 @@ class ReportConfig:
     top_n: int = 10
     trend_weeks: int = 2
     organization: str = "PMG Helpdesk"
-    source_label: str = "export ServiceNow (CSV)"
+    source_label: str = "SharePoint — Liste Tickets"
+    weekly_cap: int | None = 25
+    current_week_only: bool = False
+    period_start: str | None = None  # ISO YYYY-MM-DD
+    period_end: str | None = None
+    volume_only: bool = False  # ignore statut, durée, SLA — volume réel uniquement
+    exclude_weekends: bool = True  # exclure tickets créés samedi/dimanche
+    snow_instance: str | None = None
+    week_mode: str = "production"  # production | test_current
 
     def ensure_dirs(self) -> None:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         CHARTS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @dataclass
@@ -111,13 +137,13 @@ class GraphConfig:
     client_id: str | None = None
     client_secret: str | None = None
     site_host: str | None = None
-    site_path: str = "/"
+    site_path: str = "/sites/ServiceNow"
     list_name: str = "Tickets"
     list_id: str | None = None
     site_id: str | None = None
     sender_upn: str | None = None
     email_to: list[str] = field(default_factory=list)
-    email_subject: str = "Rapport hebdomadaire KPI — PMG Helpdesk"
+    email_subject: str = "Rapport hebdomadaire KPI - PMG Helpdesk"
 
 
 @dataclass
@@ -125,7 +151,7 @@ class EmailConfig:
     """Email delivery — Graph (preferred) or SMTP fallback."""
 
     to_addrs: list[str] = field(default_factory=list)
-    subject: str = "Rapport hebdomadaire KPI — PMG Helpdesk"
+    subject: str = "Rapport hebdomadaire KPI - PMG Helpdesk"
     sender_upn: str | None = None
     smtp_host: str | None = None
     smtp_port: int = 587

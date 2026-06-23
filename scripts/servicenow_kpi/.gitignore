@@ -1,8 +1,12 @@
 .env
+.cache/
 .charts_cache/
+logs/
 *.csv
 exports/
 __pycache__/
 *.pyc
 reports/
 exports/
+
+scripts/servicenow_kpi/reports/

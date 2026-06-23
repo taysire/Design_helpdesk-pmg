@@ -8,6 +8,23 @@ from pathlib import Path
 from typing import Any
 
 from config import BRAND
+from executive_summary import build_executive_summary
+
+
+def _delta_badge(delta: int, pct: float | None, *, invert: bool = False) -> str:
+    """Visual badge for week-over-week delta (↑ hausse, ↓ baisse, → stable)."""
+    if pct is None and delta == 0:
+        return '<span class="badge badge-neutral">→ stable</span>'
+    good = delta < 0 if not invert else delta > 0
+    if delta == 0 or (pct is not None and abs(pct) < 5):
+        return '<span class="badge badge-neutral">→ stable</span>'
+    if good:
+        cls, arrow = "badge-good", "↓"
+    else:
+        cls, arrow = "badge-bad", "↑"
+    sign = f"+{delta}" if delta > 0 else str(delta)
+    pct_str = f" ({pct:+.1f}%)" if pct is not None else ""
+    return f'<span class="badge {cls}">{arrow} {sign}{pct_str}</span>'
 
 
 def _trend_badge(pct: float | None, invert: bool = False) -> str:
@@ -64,6 +81,88 @@ def _sla_bar(pct: float, label: str) -> str:
     </div>"""
 
 
+def _columns_list_html(columns: list[str]) -> str:
+    if not columns:
+        return "<p class='muted'>Aucune colonne détectée</p>"
+    chips = "".join(f"<span class='col-chip'>{escape(c)}</span>" for c in columns)
+    return f"<div class='col-chips'>{chips}</div>"
+
+
+def _sharepoint_qa_panel(qa: dict[str, Any]) -> str:
+    sp = qa.get("sharepoint") or {}
+    if not sp:
+        return ""
+    warnings = sp.get("warnings") or []
+    warn_html = ""
+    if warnings:
+        items = "".join(f"<li>{escape(w)}</li>" for w in warnings)
+        warn_html = f"""
+    <div class="warn-box">
+      <strong>⚠ Données manquantes ou exclues</strong>
+      <ul>{items}</ul>
+    </div>"""
+    status = (
+        "<span class='badge badge-good'>Données validées</span>"
+        if qa.get("ok", True) and not sp.get("has_warnings")
+        else "<span class='badge badge-bad'>Attention — voir détails</span>"
+        if warnings
+        else "<span class='badge badge-neutral'>Contrôle effectué</span>"
+    )
+    cols = sp.get("available_columns") or []
+    title = "Qualité des données CSV" if sp.get("source") == "csv" else "Qualité des données SharePoint"
+    return f"""
+  <div class="section-title">{title}</div>
+  <div class="qa-panel sp-panel">
+    <p>{status} · Liste : <strong>{escape(str(sp.get('list_name', 'Tickets')))}</strong></p>
+    <p class="muted">
+      Source : <a href="{escape(str(sp.get('list_url', '')))}" style="color:var(--primary)">{escape(str(sp.get('list_url', '')))}</a>
+    </p>
+    {warn_html}
+    <table class="compare-table data-table sp-meta-table">
+      <tbody>
+        <tr><td>Identifiant unique</td><td><code>{escape(str(sp.get('unique_id_field', 'ID')))}</code></td></tr>
+        <tr><td>Champ date utilisé</td><td><code>{escape(str(sp.get('date_field', 'Created')))}</code></td></tr>
+        <tr><td>Éléments dans la liste (total)</td><td class="num">{sp.get('total_list_items', '—')}</td></tr>
+        <tr><td>Tickets période (avant exclusion weekends)</td><td class="num">{sp.get('total_in_period_before_weekend', '—')}</td></tr>
+        <tr><td>Weekends exclus (sam/dim)</td><td class="num">{sp.get('weekend_excluded', 0)}</td></tr>
+        <tr><td>Total après exclusion</td><td class="num"><strong>{sp.get('total_after_exclusion', '—')}</strong></td></tr>
+        <tr><td>Sans date Created</td><td class="num">{sp.get('missing_created', 0)}</td></tr>
+        <tr><td>Hors période analysée</td><td class="num">{sp.get('outside_period', 0)}</td></tr>
+        <tr><td>Pages Graph récupérées</td><td class="num">{sp.get('pages_fetched', '—')}</td></tr>
+      </tbody>
+    </table>
+    <h3>Colonnes disponibles ({len(cols)})</h3>
+    {_columns_list_html(cols)}
+  </div>"""
+
+
+def _daily_verification_table(daily: dict[str, int], expected: dict[str, int] | None = None) -> str:
+    if not daily:
+        return "<p class='muted'>Aucune donnée journalière</p>"
+    rows = []
+    for day in sorted(daily.keys()):
+        count = daily[day]
+        exp = expected.get(day) if expected else None
+        status = ""
+        if exp is not None:
+            ok = count == exp
+            status = (
+                "<span class='badge badge-good'>OK</span>"
+                if ok else
+                f"<span class='badge badge-bad'>Attendu {exp}</span>"
+            )
+        rows.append(
+            f"<tr><td>{escape(day)}</td><td class='num'>{count}</td>"
+            f"<td class='num'>{exp if exp is not None else '—'}</td><td>{status}</td></tr>"
+        )
+    return (
+        "<table class='compare-table data-table'>"
+        "<thead><tr><th>Date</th><th style='text-align:right'>Tickets</th>"
+        "<th style='text-align:right'>Attendu</th><th>Contrôle</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
 def _week_compare_row(metric: str, prev_val: str | int, cur_val: str | int, badge: str = "") -> str:
     return f"""
     <tr>
@@ -72,6 +171,50 @@ def _week_compare_row(metric: str, prev_val: str | int, cur_val: str | int, badg
       <td class="num highlight-col">{escape(str(cur_val))}</td>
       <td class="num">{badge}</td>
     </tr>"""
+
+
+def _comparison_table_html(
+    title: str,
+    rows: list[dict[str, Any]],
+    label_header: str,
+    *,
+    col_prev: str = "Semaine 1",
+    col_cur: str = "Semaine 2",
+) -> str:
+    if not rows:
+        return f"<p class='muted'>Aucune donnée pour {escape(title)}</p>"
+    body = []
+    for row in rows:
+        delta = int(row.get("delta", 0))
+        pct = row.get("pct")
+        pct_display = f"{pct:+.1f}%" if pct is not None else "—"
+        body.append(
+            f"<tr>"
+            f"<td>{escape(str(row['label']))}</td>"
+            f"<td class='num muted-col'>{row['week1']}</td>"
+            f"<td class='num highlight-col'>{row['week2']}</td>"
+            f"<td class='num'>{delta:+d}</td>"
+            f"<td class='num'>{pct_display}</td>"
+            f"<td>{_delta_badge(delta, pct)}</td>"
+            f"</tr>"
+        )
+    return f"""
+  <div class="section-title">{escape(title)}</div>
+  <div class="compare-panel">
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>{escape(label_header)}</th>
+          <th style="text-align:right">{escape(col_prev)}</th>
+          <th style="text-align:right">{escape(col_cur)}</th>
+          <th style="text-align:right">Évolution</th>
+          <th style="text-align:right">Évolution %</th>
+          <th>Tendance</th>
+        </tr>
+      </thead>
+      <tbody>{''.join(body)}</tbody>
+    </table>
+  </div>"""
 
 
 def build_html_report(
@@ -87,6 +230,14 @@ def build_html_report(
     pw = kpis["previous_week"]
     generated = datetime.now().strftime("%d/%m/%Y %H:%M")
 
+    volume_only = kpis.get("report_options", {}).get("volume_only", False)
+    apps = kpis.get("by_application", {})
+    equipment = kpis.get("by_equipment", {})
+    combined = kpis.get("by_combined", {})
+    qa = kpis.get("quality", {})
+    daily = qa.get("daily_counts") or kpis.get("daily_counts", {})
+    period_label = tw.get("label", f"{pw.range_label} – {cw.range_label}")
+
     rec_html = "".join(
         f"""<div class="rec {_severity_class(r['severity'])}">
           <strong>{escape(r['title'])}</strong>
@@ -95,28 +246,223 @@ def build_html_report(
         for r in recommendations
     )
 
-    def chart_img(key: str, title: str, full_width: bool = False) -> str:
+    def chart_img(key: str, title: str = "", full_width: bool = False, *, show_title: bool = True) -> str:
         if key not in charts:
             return ""
         cls = "chart-card chart-full" if full_width else "chart-card"
+        title_html = f"<h3>{escape(title)}</h3>" if show_title and title else ""
+        alt = escape(title or key)
         return (
-            f'<div class="{cls}"><h3>{escape(title)}</h3>'
-            f'<img src="data:image/png;base64,{charts[key]}" alt="{escape(title)}"/></div>'
+            f'<div class="{cls}">{title_html}'
+            f'<img src="data:image/png;base64,{charts[key]}" alt="{alt}"/></div>'
         )
 
-    compare_rows = "".join([
-        _week_compare_row("Tickets créés", s["created_last_week"], s["created_this_week"],
-                          _trend_badge(s["volume_change_pct"])),
-        _week_compare_row("Tickets clôturés", s["completed_last_week"], s["completed_this_week"],
-                          _trend_badge(s["completed_change_pct"], invert=True)),
-        _week_compare_row("Taux clôture", f"{s['week_closure_rate_previous']}%",
-                          f"{s['week_closure_rate_current']}%"),
-        _week_compare_row("Tickets critiques", s["critical_last_week"], s["critical_this_week"]),
-        _week_compare_row("Conformité SLA", f"{s.get('sla_previous_sla_compliance_pct', 0)}%",
-                          f"{s.get('sla_current_sla_compliance_pct', 0)}%"),
-        _week_compare_row("Temps moyen (min)", s.get("sla_previous_avg_resolution_min", 0),
-                          s.get("sla_current_avg_resolution_min", 0)),
-    ])
+    if volume_only:
+        exec_sum = build_executive_summary(kpis)
+        comp = kpis.get("comparison_tables", {})
+        test_mode = kpis.get("report_options", {}).get("week_mode") == "test_current"
+        col_prev = f"Semaine précédente · {pw.range_label}" if test_mode else "Semaine 1"
+        col_cur = f"Semaine courante · {cw.range_label}" if test_mode else "Semaine 2"
+        tbl_kw = {"col_prev": col_prev, "col_cur": col_cur}
+        vol_pct = s.get("volume_change_pct")
+        vol_delta = s["created_this_week"] - s["created_last_week"]
+        vol_display = f"{vol_pct:+.1f}%" if vol_pct is not None else "—"
+        sp = qa.get("sharepoint") or {}
+        before_excl = sp.get("total_in_period_before_weekend", s["total_tickets"])
+        weekend_excl = sp.get("weekend_excluded", 0)
+        after_excl = sp.get("total_after_exclusion", s["total_tickets"])
+        trend_cls = {
+            "hausse": "exec-trend-bad",
+            "baisse": "exec-trend-good",
+            "stable": "exec-trend-neutral",
+        }.get(exec_sum["trend"], "exec-trend-neutral")
+
+        summary_strip = f"""
+    <div class="kpi-cards-top">
+      {_kpi_card("Avant exclusion", before_excl, "Période · weekends inclus", accent="primary")}
+      {_kpi_card("Weekends exclus", weekend_excl, "Sam/dim retirés", accent="warning")}
+      {_kpi_card("Après exclusion", after_excl, "Base du rapport", accent="primary")}
+      {_kpi_card("Semaine 1", s['created_last_week'], pw.range_label, _delta_badge(0, None), "primary")}
+      {_kpi_card("Semaine 2", s['created_this_week'], cw.range_label, _delta_badge(vol_delta, vol_pct), "primary")}
+      {_kpi_card("Évolution", f"{vol_delta:+d}", vol_display, _delta_badge(vol_delta, vol_pct), "primary")}
+    </div>"""
+
+        executive_panel = f"""
+  <div class="exec-panel">
+    <h2>Résumé exécutif</h2>
+    <p class="exec-trend {trend_cls}">{escape(exec_sum['trend_text'])}</p>
+    <p>{escape(exec_sum['changes_text'])}</p>
+    <p class="muted">{escape(exec_sum['impact_text'])}</p>
+  </div>"""
+
+        comparison_section = "".join([
+            _comparison_table_html("Résumé global", comp.get("summary", []), "Indicateur", **tbl_kw),
+            _comparison_table_html("Top catégories — Applications", comp.get("applications", []), "Application", **tbl_kw),
+            _comparison_table_html("Top catégories — Équipements", comp.get("equipment", []), "Équipement", **tbl_kw),
+        ])
+        combined_rows = comp.get("combined", [])
+        combined_table = ""
+        if combined_rows:
+            combined_table = _comparison_table_html(
+                "Évolution combinée — Applications & Équipements",
+                combined_rows,
+                "Catégorie",
+                **tbl_kw,
+            )
+        legacy_compare_section = ""
+        kpi_detail_section = ""
+        daily_panel = ""
+
+        compare_rows = ""
+        sla_panel = ""
+        kpi_extra = ""
+        qa_panel = ""
+        daily_panel = ""
+        unclassified = qa.get("unclassified_titles") or {}
+        unclassified_panel = ""
+        if unclassified:
+            unclassified_panel = f"""
+  <div class="section-title">Titres non classifiés (hors graphiques)</div>
+  <div class="panel">{_table_from_dict(unclassified, limit=20)}</div>"""
+        detail_section = ""
+        stale_panel = ""
+        freshness = qa.get("freshness") or {}
+        if freshness.get("stale"):
+            stale_panel = f"""
+  <div class="stale-panel">
+    <strong>⚠ Données incomplètes</strong>
+    <p>{escape(freshness.get('message', 'Données SharePoint incomplètes pour la période demandée.'))}</p>
+    <p class="muted">Dernier ticket : {escape(str(freshness.get('last_ticket', '—')))} · Attendu jusqu'au : {escape(str(freshness.get('period_end', '—')))}</p>
+  </div>"""
+        hero_charts = f"""
+  <div class="charts-hero-stack">
+    {chart_img("problem_evolution", full_width=True, show_title=False)}
+    {chart_img("combined_problems", full_width=True, show_title=False)}
+  </div>"""
+        secondary_charts = f"""
+  <div class="section-title">Autres graphiques & tendances</div>
+  <div class="charts-grid charts-secondary">
+    {chart_img("category_evolution", "Évolution par catégorie (↑↓)", full_width=True)}
+    {chart_img("two_weeks", "Volume — semaine précédente vs courante", full_width=True)}
+    {chart_img("combined_cmp", "Top catégories — barres comparatives", full_width=True)}
+    {chart_img("daily", "Tickets par jour (lun–ven)", full_width=True)}
+  </div>"""
+        charts_section = f"""
+  <div class="section-title">Vue principale — évolution des catégories</div>
+  <p class="muted section-lead">Breakdown + distribution proportionnelle · semaine précédente vs semaine courante</p>
+  {stale_panel}
+  {hero_charts}
+  {secondary_charts}
+  {combined_table}
+  {unclassified_panel}"""
+        period_desc = "deux dernières semaines complètes passées (lun–ven)"
+        hero_title = f"Rapport bi-hebdomadaire KPI — {escape(organization)}"
+        hero_sub = (
+            f"Période analysée : {period_desc} · Weekends sam/dim exclus · "
+            f"Source SharePoint · Généré le {generated}"
+        )
+        footer_note = (
+            "Source : SharePoint Liste Tickets · Identifiant : ID · Date : Created · "
+            "Semaines ouvrables lun–ven · Weekends exclus · Fuseau America/Toronto · "
+            f"Période : {escape(period_label)}"
+        )
+    else:
+        compare_rows = "".join([
+            _week_compare_row("Tickets créés", s["created_last_week"], s["created_this_week"],
+                              _trend_badge(s["volume_change_pct"])),
+            _week_compare_row("Tickets clôturés", s["completed_last_week"], s["completed_this_week"],
+                              _trend_badge(s["completed_change_pct"], invert=True)),
+            _week_compare_row("Taux clôture", f"{s['week_closure_rate_previous']}%",
+                              f"{s['week_closure_rate_current']}%"),
+            _week_compare_row("Tickets critiques", s["critical_last_week"], s["critical_this_week"]),
+            _week_compare_row("Conformité SLA", f"{s.get('sla_previous_sla_compliance_pct', 0)}%",
+                              f"{s.get('sla_current_sla_compliance_pct', 0)}%"),
+            _week_compare_row("Temps moyen (min)", s.get("sla_previous_avg_resolution_min", 0),
+                              s.get("sla_current_avg_resolution_min", 0)),
+        ])
+        summary_strip = f"""
+    <div class="summary-strip">
+      <div class="summary-item"><div class="val">{tw.get('created_total', s['created_this_week'] + s['created_last_week'])}</div><div class="lbl">Tickets créés (2 sem.)</div></div>
+      <div class="summary-item"><div class="val">{tw.get('completed_total', s['completed_this_week'] + s['completed_last_week'])}</div><div class="lbl">Tickets clôturés (2 sem.)</div></div>
+      <div class="summary-item"><div class="val">{tw.get('sla_compliance_pct', s.get('sla_two_weeks_sla_compliance_pct', 0))}%</div><div class="lbl">Conformité SLA</div></div>
+      <div class="summary-item"><div class="val">{tw.get('avg_resolution_min', s.get('sla_two_weeks_avg_resolution_min', 0))} min</div><div class="lbl">Temps moyen résolution</div></div>
+    </div>"""
+        sla_panel = f"""
+  <div class="sla-panel">
+    <h3>Performance SLA — 2 semaines</h3>
+    {_sla_bar(s.get('sla_previous_sla_compliance_pct', 0) or 0, f"Semaine précédente ({pw.range_label})")}
+    {_sla_bar(s.get('sla_current_sla_compliance_pct', 0) or 0, f"Semaine courante ({cw.range_label})")}
+    {_sla_bar(tw.get('sla_compliance_pct', 0) or 0, "Période combinée")}
+  </div>"""
+        kpi_extra = f"""
+    {_kpi_card("Taux clôture global", f"{s['closure_rate_pct']}%", accent="success")}
+    {_kpi_card("SLA — sem. courante", f"{s.get('sla_current_sla_compliance_pct', 0)}%",
+               f"Moy. {s.get('sla_current_avg_resolution_min', 0)} min", accent="success")}"""
+        charts_section = f"""
+  <div class="section-title">Graphiques</div>
+  <div class="charts-grid">
+    {chart_img("two_weeks", "Vue d'ensemble — 2 semaines", full_width=True)}
+    {chart_img("applications", "Applications concernées", full_width=True)}
+    {chart_img("volume_trend", "Tendance volume")}
+    {chart_img("priority", "Priorités — comparaison")}
+    {chart_img("status", "Statuts — période 2 semaines")}
+    {chart_img("category", "Top catégories — sem. courante", full_width=True)}
+    {chart_img("requester", "Top requérants")}
+  </div>"""
+        hero_title = "Rapport bi-hebdomadaire KPI — ServiceNow"
+        hero_sub = f"{escape(organization)} · Généré le {generated}"
+        qa_panel = ""
+        detail_section = f"""
+  <div class="section-title">Détail par semaine</div>
+  <div class="two-col">
+    <div class="panel panel-week prev">
+      <h3>Semaine précédente — catégories</h3>
+      {_table_from_dict(kpis['by_category']['previous_week'])}
+    </div>
+    <div class="panel panel-week">
+      <h3>Semaine courante — catégories</h3>
+      {_table_from_dict(kpis['by_category']['current_week'])}
+    </div>
+    <div class="panel panel-week prev">
+      <h3>Semaine précédente — requérants</h3>
+      {_table_from_dict(kpis['by_requester']['previous_week'])}
+    </div>
+    <div class="panel panel-week">
+      <h3>Semaine courante — requérants</h3>
+      {_table_from_dict(kpis['by_requester']['current_week'])}
+    </div>
+  </div>"""
+        executive_panel = ""
+        comparison_section = ""
+        legacy_compare_section = f"""
+  <div class="section-title">Comparaison semaine par semaine</div>
+  <div class="compare-panel">
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>Indicateur</th>
+          <th style="text-align:right">Sem. 1 · {escape(pw.range_label)}</th>
+          <th style="text-align:right">Sem. 2 · {escape(cw.range_label)}</th>
+          <th style="text-align:right">Tendance</th>
+        </tr>
+      </thead>
+      <tbody>{compare_rows}</tbody>
+    </table>
+  </div>"""
+        kpi_detail_section = f"""
+  <div class="section-title">Indicateurs détaillés</div>
+  <div class="kpi-grid">
+    {_kpi_card("Tickets (période)", s['total_tickets'], accent="primary")}
+    {_kpi_card("Créés — sem. 2", s['created_this_week'],
+               f"Sem. 1 : {s['created_last_week']}", _trend_badge(s['volume_change_pct']), "primary")}
+    {_kpi_card("Créés — sem. 1", s['created_last_week'], accent="primary")}
+    {_kpi_card("Critiques — sem. 2", s['critical_this_week'],
+               f"Sem. 1 : {s['critical_last_week']}", accent="warning")}
+    {kpi_extra}
+  </div>"""
+        footer_note = (
+            f"Source : {escape(source_label)} · Fuseau America/Toronto · Semaine ISO (lundi-dimanche)."
+        )
 
     return f"""<!DOCTYPE html>
 <html lang="fr">
@@ -170,6 +516,53 @@ def build_html_report(
   .summary-strip {{
     display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px;
   }}
+  .summary-strip-5 {{ grid-template-columns: repeat(5, 1fr); }}
+  .summary-strip-6 {{ grid-template-columns: repeat(6, 1fr); }}
+  .kpi-cards-top {{
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 28px;
+  }}
+  .kpi-cards-top .kpi-card {{ margin: 0; }}
+  .sp-panel {{ border-left: 4px solid var(--primary); }}
+  .sp-meta-table td:first-child {{ font-weight: 600; color: var(--muted); width: 55%; }}
+  .col-chips {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }}
+  .col-chip {{
+    font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 6px;
+    background: #EFF6FF; color: var(--primary-dark); border: 1px solid #BFDBFE;
+  }}
+  .warn-box {{
+    background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px;
+    padding: 12px 14px; margin: 12px 0; font-size: 13px;
+  }}
+  .warn-box ul {{ margin: 6px 0 0; padding-left: 18px; }}
+  code {{ font-size: 12px; background: #F1F5F9; padding: 2px 6px; border-radius: 4px; }}
+  .exec-panel {{
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 22px 24px; margin-bottom: 28px; border-left: 4px solid var(--primary);
+    box-shadow: 0 2px 8px rgba(11,13,16,0.04);
+  }}
+  .exec-panel h2 {{ margin: 0 0 12px; font-size: 16px; font-weight: 700; }}
+  .exec-trend {{ font-size: 15px; font-weight: 600; margin: 0 0 10px; }}
+  .exec-trend-good {{ color: #166534; }}
+  .exec-trend-bad {{ color: #991B1B; }}
+  .exec-trend-neutral {{ color: var(--muted); }}
+  .stale-panel {{
+    background: #FEF2F2; border: 1px solid #FECACA; border-left: 4px solid var(--critical);
+    border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; font-size: 13px;
+  }}
+  .stale-panel strong {{ display: block; margin-bottom: 6px; color: #991B1B; }}
+  .stale-panel p {{ margin: 4px 0; }}
+  .charts-hero-stack {{
+    display: flex; flex-direction: column; gap: 22px; margin-bottom: 32px;
+  }}
+  .charts-hero-stack .chart-card {{
+    box-shadow: 0 4px 16px rgba(8,46,102,0.08);
+    border: 1px solid var(--border);
+  }}
+  .charts-secondary {{ margin-bottom: 28px; }}
+  .qa-panel {{
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 22px; margin-bottom: 24px;
+  }}
   .summary-item {{
     background: var(--card); border: 1px solid var(--border); border-radius: 12px;
     padding: 18px 20px; text-align: center;
@@ -178,6 +571,8 @@ def build_html_report(
   .summary-item .val {{ font-size: 32px; font-weight: 800; color: var(--primary-dark); letter-spacing: -0.03em; }}
   .summary-item .lbl {{ font-size: 11px; font-weight: 600; text-transform: uppercase;
     letter-spacing: 0.07em; color: var(--muted); margin-top: 4px; }}
+  .section-lead {{ margin: -8px 0 20px; font-size: 14px; }}
+  .panel-highlight {{ border-top: 3px solid var(--primary); margin-bottom: 24px; }}
   .section-title {{
     font-size: 17px; font-weight: 700; margin: 32px 0 16px; letter-spacing: -0.02em;
     padding-bottom: 8px; border-bottom: 2px solid var(--primary); display: inline-block;
@@ -258,7 +653,8 @@ def build_html_report(
   .footer {{ margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border);
     font-size: 12px; color: var(--muted); text-align: center; }}
   @media (max-width: 900px) {{
-    .summary-strip {{ grid-template-columns: 1fr 1fr; }}
+    .summary-strip, .summary-strip-5, .summary-strip-4, .summary-strip-6 {{ grid-template-columns: 1fr 1fr; }}
+    .kpi-cards-top {{ grid-template-columns: 1fr 1fr; }}
     .charts-grid, .two-col {{ grid-template-columns: 1fr; }}
   }}
   @media (max-width: 520px) {{
@@ -276,118 +672,33 @@ def build_html_report(
 <div class="wrap">
   <header class="hero">
     <div class="hero-tag">Rapport bi-hebdomadaire</div>
-    <h1>KPI Helpdesk — 2 dernières semaines</h1>
-    <p>{escape(organization)} · Généré le {generated}</p>
+    <h1>{hero_title}</h1>
+    <p>{hero_sub}</p>
     <div class="period">
-      <span><strong>Période analysée :</strong> {escape(tw.get('label', cw.range_label))}</span>
-      <span><strong>Sem. courante :</strong> {escape(cw.range_label)}</span>
-      <span><strong>Sem. précédente :</strong> {escape(pw.range_label)}</span>
+      <span><strong>Période :</strong> {escape(tw.get('label', cw.range_label))}</span>
+      <span><strong>Sem. 1 :</strong> {escape(pw.range_label)}</span>
+      <span><strong>Sem. 2 :</strong> {escape(cw.range_label)}</span>
     </div>
   </header>
 
-  <div class="summary-strip">
-    <div class="summary-item">
-      <div class="val">{tw.get('created_total', s['created_this_week'] + s['created_last_week'])}</div>
-      <div class="lbl">Tickets créés (2 sem.)</div>
-    </div>
-    <div class="summary-item">
-      <div class="val">{tw.get('completed_total', s['completed_this_week'] + s['completed_last_week'])}</div>
-      <div class="lbl">Tickets clôturés (2 sem.)</div>
-    </div>
-    <div class="summary-item">
-      <div class="val">{tw.get('sla_compliance_pct', s.get('sla_two_weeks_sla_compliance_pct', 0))}%</div>
-      <div class="lbl">Conformité SLA</div>
-    </div>
-    <div class="summary-item">
-      <div class="val">{tw.get('avg_resolution_min', s.get('sla_two_weeks_avg_resolution_min', 0))} min</div>
-      <div class="lbl">Temps moyen résolution</div>
-    </div>
-  </div>
+  {summary_strip}
 
-  <div class="section-title">Comparaison semaine par semaine</div>
-  <div class="compare-panel">
-    <table class="compare-table">
-      <thead>
-        <tr>
-          <th>Indicateur</th>
-          <th style="text-align:right">{escape(pw.range_label)}</th>
-          <th style="text-align:right">{escape(cw.range_label)}</th>
-          <th style="text-align:right">Tendance</th>
-        </tr>
-      </thead>
-      <tbody>{compare_rows}</tbody>
-    </table>
-  </div>
+  {executive_panel}
 
-  <div class="sla-panel">
-    <h3>Performance SLA — 2 semaines</h3>
-    {_sla_bar(s.get('sla_previous_sla_compliance_pct', 0), f"Semaine précédente ({pw.range_label})")}
-    {_sla_bar(s.get('sla_current_sla_compliance_pct', 0), f"Semaine courante ({cw.range_label})")}
-    {_sla_bar(tw.get('sla_compliance_pct', 0), "Période combinée")}
-    <p class="muted" style="margin:12px 0 0">
-      {tw.get('sla_breaches', s.get('sla_two_weeks_sla_breaches', 0))} dépassements SLA sur la période
-    </p>
-  </div>
+  {comparison_section}
 
-  <div class="section-title">Indicateurs détaillés</div>
-  <div class="kpi-grid">
-    {_kpi_card("Total export", s['total_tickets'], accent="primary")}
-    {_kpi_card("Créés — sem. courante", s['created_this_week'],
-               f"Sem. préc. : {s['created_last_week']}", _trend_badge(s['volume_change_pct']), "primary")}
-    {_kpi_card("Clôturés — sem. courante", s['completed_this_week'],
-               f"Sem. préc. : {s['completed_last_week']}", _trend_badge(s['completed_change_pct'], invert=True), "success")}
-    {_kpi_card("Taux clôture global", f"{s['closure_rate_pct']}%", accent="success")}
-    {_kpi_card("Critiques — sem. courante", s['critical_this_week'],
-               f"Sem. préc. : {s['critical_last_week']}", accent="warning")}
-    {_kpi_card("SLA — sem. courante", f"{s.get('sla_current_sla_compliance_pct', 0)}%",
-               f"Moy. {s.get('sla_current_avg_resolution_min', 0)} min", accent="success")}
-  </div>
+  {legacy_compare_section}
 
-  <div class="section-title">Graphiques</div>
-  <div class="charts-grid">
-    {chart_img("two_weeks", "Vue d'ensemble — 2 semaines", full_width=True)}
-    {chart_img("volume_trend", "Tendance volume")}
-    {chart_img("priority", "Priorités — comparaison")}
-    {chart_img("status", "Statuts — période 2 semaines")}
-    {chart_img("category", "Top catégories — sem. courante", full_width=True)}
-    {chart_img("assignee", "Charge par assigné")}
-    {chart_img("requester", "Top requérants")}
-  </div>
+  {sla_panel}
 
-  <div class="section-title">Détail par semaine</div>
-  <div class="two-col">
-    <div class="panel panel-week prev">
-      <h3>Semaine précédente — catégories</h3>
-      {_table_from_dict(kpis['by_category']['previous_week'])}
-    </div>
-    <div class="panel panel-week">
-      <h3>Semaine courante — catégories</h3>
-      {_table_from_dict(kpis['by_category']['current_week'])}
-    </div>
-    <div class="panel panel-week prev">
-      <h3>Semaine précédente — assignés</h3>
-      {_table_from_dict(kpis['by_assignee']['previous_week'])}
-    </div>
-    <div class="panel panel-week">
-      <h3>Semaine courante — assignés</h3>
-      {_table_from_dict(kpis['by_assignee']['current_week'])}
-    </div>
-    <div class="panel panel-week prev">
-      <h3>Semaine précédente — requérants</h3>
-      {_table_from_dict(kpis['by_requester']['previous_week'])}
-    </div>
-    <div class="panel panel-week">
-      <h3>Semaine courante — requérants</h3>
-      {_table_from_dict(kpis['by_requester']['current_week'])}
-    </div>
-  </div>
+  {kpi_detail_section}
 
-  <div class="section-title">Recommandations management</div>
-  {rec_html}
+  {charts_section}
+
+  {detail_section}
 
   <div class="footer">
-    Source : {escape(source_label)} · Fichier <em>Tickets__KPI</em> ·
-    Semaine ISO (lundi–dimanche) · Colonne <em>Created</em> pour les dates de création.
+    {footer_note}
   </div>
 </div>
 </body>

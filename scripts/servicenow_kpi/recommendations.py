@@ -17,6 +17,7 @@ def _trend_label(pct: float | None, up_is_bad: bool = True) -> str:
 
 def generate_recommendations(kpis: dict[str, Any], lang: str = "fr") -> list[dict[str, str]]:
     s = kpis["summary"]
+    volume_only = kpis.get("report_options", {}).get("volume_only", False)
     recs: list[dict[str, str]] = []
 
     vol = s.get("volume_change_pct")
@@ -31,7 +32,7 @@ def generate_recommendations(kpis: dict[str, Any], lang: str = "fr") -> list[dic
     # SLA compliance
     sla_cur = s.get("sla_current_sla_compliance_pct")
     sla_breaches = s.get("sla_current_sla_breaches", 0)
-    if sla_cur is not None and sla_cur < 90 and created_cur > 0:
+    if not volume_only and sla_cur is not None and sla_cur < 90 and created_cur > 0:
         recs.append({
             "severity": "warning",
             "title": "Conformité SLA en baisse",
@@ -64,7 +65,7 @@ def generate_recommendations(kpis: dict[str, Any], lang: str = "fr") -> list[dic
         })
 
     # Backlog
-    if open_new > 50:
+    if not volume_only and open_new > 50:
         recs.append({
             "severity": "critical",
             "title": "Backlog élevé de tickets ouverts",
@@ -73,7 +74,7 @@ def generate_recommendations(kpis: dict[str, Any], lang: str = "fr") -> list[dic
                 "Prioriser le triage quotidien et définir des objectifs de première réponse."
             ),
         })
-    elif open_new > 25:
+    elif not volume_only and open_new > 25:
         recs.append({
             "severity": "warning",
             "title": "Backlog en croissance",
@@ -84,7 +85,7 @@ def generate_recommendations(kpis: dict[str, Any], lang: str = "fr") -> list[dic
         })
 
     # Closure rate
-    if closure < 40:
+    if closure is not None and closure < 40:
         recs.append({
             "severity": "warning",
             "title": "Taux de clôture global faible",
@@ -93,7 +94,7 @@ def generate_recommendations(kpis: dict[str, Any], lang: str = "fr") -> list[dic
                 "Revoir les tickets anciens et fermer ceux résolus sans mise à jour de statut."
             ),
         })
-    if week_closure < 30 and created_cur > 5:
+    if week_closure is not None and week_closure < 30 and created_cur > 5:
         recs.append({
             "severity": "warning",
             "title": "Faible résolution sur les tickets de la semaine",
@@ -115,47 +116,47 @@ def generate_recommendations(kpis: dict[str, Any], lang: str = "fr") -> list[dic
             ),
         })
 
-    # Category hotspots
-    cats = kpis["by_category"]["current_week"]
-    if cats:
-        top_cat, top_count = next(iter(cats.items()))
-        if created_cur > 0 and top_count / created_cur > 0.35:
+    # Applications hotspots (volume-only) — use combined categories
+    if volume_only:
+        combined_period = kpis.get("by_combined", {}).get("period", {})
+        if combined_period:
+            top_cat, top_count = next(iter(combined_period.items()))
+            period_total = s["total_tickets"]
+            if period_total > 0 and top_count / period_total > 0.12:
+                recs.append({
+                    "severity": "info",
+                    "title": f"Catégorie dominante : {top_cat}",
+                    "body": (
+                        f"« {top_cat} » compte {top_count} tickets sur la période "
+                        f"({round(top_count / period_total * 100)}% du volume). "
+                        "Prioriser la documentation et le support ciblé."
+                    ),
+                })
+        app_period = combined_period
+        recurring_apps = [t for t, c in app_period.items() if c >= 3 and t != "Autres"]
+        if recurring_apps:
             recs.append({
                 "severity": "info",
-                "title": f"Catégorie dominante : {top_cat}",
+                "title": "Applications fréquentes",
                 "body": (
-                    f"« {top_cat} » représente {top_count} tickets ({round(top_count/created_cur*100)}% du volume). "
-                    "Créer ou mettre à jour un article de base de connaissances et automatiser si possible."
+                    "Applications les plus sollicitées : "
+                    + ", ".join(recurring_apps[:5])
+                    + ". Documenter les procédures et surveiller les tendances."
                 ),
             })
-
-    # Assignee concentration
-    assignees = kpis["by_assignee"]["current_week"]
-    if assignees:
-        top_a, top_a_count = next(iter(assignees.items()))
-        if created_cur > 0 and top_a_count / created_cur > 0.7 and top_a != "Non assigné":
+    else:
+        titles = kpis.get("top_titles_current_week", {})
+        recurring = [t for t, c in titles.items() if c >= 3 and t]
+        if recurring:
             recs.append({
-                "severity": "warning",
-                "title": "Charge concentrée sur un assigné",
+                "severity": "info",
+                "title": "Incidents récurrents détectés",
                 "body": (
-                    f"{top_a} traite {top_a_count} tickets ({round(top_a_count/created_cur*100)}% du volume). "
-                    "Évaluer la répartition de charge ou le besoin de renfort."
+                    "Sujets fréquents cette semaine : "
+                    + ", ".join(f"« {t} »" for t in recurring[:5])
+                    + ". Documenter les procédures de résolution et surveiller les tendances."
                 ),
             })
-
-    # Recurring titles (from top titles)
-    titles = kpis.get("top_titles_current_week", {})
-    recurring = [t for t, c in titles.items() if c >= 3 and t]
-    if recurring:
-        recs.append({
-            "severity": "info",
-            "title": "Incidents récurrents détectés",
-            "body": (
-                "Sujets fréquents cette semaine : "
-                + ", ".join(f"« {t} »" for t in recurring[:5])
-                + ". Documenter les procédures de résolution et surveiller les tendances."
-            ),
-        })
 
     if not recs:
         recs.append({
